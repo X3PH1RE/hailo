@@ -92,7 +92,7 @@ const RiderDashboard = () => {
       const driverLng = pickup.coordinates[0] + 0.005;
       const driverLat = pickup.coordinates[1] + 0.005;
       return {
-        start: [driverLng, driverLat],
+        start: [driverLng, driverLat] as [number, number],
         end: pickup.coordinates,
       };
     }

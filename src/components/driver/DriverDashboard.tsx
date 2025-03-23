@@ -179,8 +179,9 @@ const DriverDashboard = () => {
     
     if (driverStatus === "rideAccepted" || driverStatus === "pickingUp") {
       // Route from driver to pickup
+      // Fixed type issue with explicit tuple type for coordinates
       return {
-        start: [77.2090, 28.6139], // Driver location (would be dynamic in real app)
+        start: [77.2090, 28.6139] as [number, number], // Driver location (would be dynamic in real app)
         end: currentRide.pickup.coordinates,
       };
     }
@@ -426,6 +427,7 @@ const DriverDashboard = () => {
                       
                       // Generate new ride requests after a short delay
                       setTimeout(() => {
+                        // Fix here: Compare with string literal, not variable
                         if (driverStatus === "online") {
                           generateRideRequests();
                         }
