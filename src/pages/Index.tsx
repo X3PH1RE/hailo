@@ -1,26 +1,50 @@
 
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import RiderDashboard from "@/components/rider/RiderDashboard";
 import DriverDashboard from "@/components/driver/DriverDashboard";
 import Header from "@/components/layout/Header";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import AuthSection from "@/components/auth/AuthSection";
 
 const Index = () => {
   const [userMode, setUserMode] = useState<"rider" | "driver">("rider");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // For demonstration purposes - replace with actual Supabase auth
-    const checkAuthStatus = () => {
-      // Simulation of auth check - will be replaced with Supabase auth
-      setIsLoggedIn(false);
-    };
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setIsLoggedIn(!!session);
+        setUser(session?.user ?? null);
 
-    checkAuthStatus();
-  }, []);
+        if (event === 'SIGNED_IN') {
+          toast({
+            title: "Welcome!",
+            description: "You are now signed in.",
+          });
+        } else if (event === 'SIGNED_OUT') {
+          toast({
+            title: "Signed out",
+            description: "You have been signed out.",
+          });
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [toast]);
 
   const handleModeChange = (value: string) => {
     setUserMode(value as "rider" | "driver");
@@ -70,43 +94,6 @@ const Index = () => {
           <p>© 2023 Hailo - College Ride-Sharing Platform</p>
         </div>
       </footer>
-    </div>
-  );
-};
-
-// Auth Section Component
-const AuthSection = () => {
-  return (
-    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl my-16">
-      <div className="p-8">
-        <div className="flex justify-center mb-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-purple-800">Hailo</h1>
-            <p className="text-lg text-gray-600 mt-2">College Ride-Sharing Platform</p>
-          </div>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-semibold text-gray-800">Welcome to Hailo</h2>
-            <p className="text-gray-600 mt-2">Sign in with your college email to continue</p>
-          </div>
-          
-          <div className="space-y-4">
-            <Button 
-              variant="default" 
-              className="w-full bg-purple-600 hover:bg-purple-700"
-              size="lg"
-            >
-              Sign in with College Email
-            </Button>
-            
-            <div className="text-center text-sm text-gray-500">
-              <p>Only .edu.in email domains are allowed</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

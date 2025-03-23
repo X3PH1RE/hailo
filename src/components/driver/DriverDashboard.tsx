@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Check, Clock, MapPin, Navigation, Phone, Star, User, X } from "lucide-react";
 import MapView from "@/components/map/MapView";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type DriverStatus = "offline" | "online" | "rideAccepted" | "pickingUp" | "inProgress" | "completed";
 
@@ -35,6 +37,23 @@ const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [currentRide, setCurrentRide] = useState<RideRequest | null>(null);
   const { toast } = useToast();
+
+  // Check for authenticated user
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        // User is not authenticated
+        toast({
+          title: "Not logged in",
+          description: "Please sign in to use the driver dashboard",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    checkAuth();
+  }, [toast]);
 
   const toggleDriverStatus = () => {
     if (!isOnline) {
@@ -124,7 +143,9 @@ const DriverDashboard = () => {
     
     if (rideRequests.length === 1) {
       setTimeout(() => {
-        if (driverStatus === "online") {
+        // Using a constant here to avoid TypeScript error with string comparison
+        const targetStatus: DriverStatus = "online";
+        if (driverStatus === targetStatus) {
           generateRideRequests();
         }
       }, 5000);
@@ -137,7 +158,7 @@ const DriverDashboard = () => {
     if (driverStatus !== "offline" && navigator.geolocation) {
       markers.push({
         id: "driver",
-        lngLat: [77.2090, 28.6139],
+        lngLat: [77.2090, 28.6139] as [number, number],
         type: "driver" as const,
       });
     }

@@ -1,14 +1,13 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MapPin, Search, Clock, Navigation } from "lucide-react";
 import MapView from "@/components/map/MapView";
 import LocationSearch from "@/components/rider/LocationSearch";
 import RideDetails from "@/components/rider/RideDetails";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type RideStatus = "idle" | "searching" | "driverAssigned" | "enRoute" | "arrived" | "inProgress" | "completed";
 
@@ -18,7 +17,24 @@ const RiderDashboard = () => {
   const [dropoff, setDropoff] = useState<{ name: string; coordinates: [number, number] } | null>(null);
   const { toast } = useToast();
 
-  const handleRequestRide = () => {
+  // Check for authenticated user
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        // User is not authenticated
+        toast({
+          title: "Not logged in",
+          description: "Please sign in to use the rider dashboard",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    checkAuth();
+  }, [toast]);
+  
+  const handleRequestRide = async () => {
     if (!pickup || !dropoff) {
       toast({
         title: "Missing Location",
@@ -30,22 +46,82 @@ const RiderDashboard = () => {
 
     setRideStatus("searching");
 
-    // Simulate finding a driver after 3 seconds
-    setTimeout(() => {
-      setRideStatus("driverAssigned");
+    try {
+      // Save ride request to Supabase
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        const { error } = await supabase
+          .from('ride_requests')
+          .insert({
+            rider_id: session.session.user.id,
+            pickup_location: pickup.name,
+            destination: dropoff.name,
+            rider_location: { 
+              longitude: pickup.coordinates[0], 
+              latitude: pickup.coordinates[1] 
+            },
+            estimated_price: calculateFare(),
+            estimated_time: 5, // 5 minutes
+            ride_type: 'standard',
+            status: 'pending'
+          });
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      // Simulate finding a driver after 3 seconds
+      setTimeout(() => {
+        setRideStatus("driverAssigned");
+        toast({
+          title: "Driver Found!",
+          description: "Rahul is on the way to pick you up.",
+        });
+      }, 3000);
+    } catch (error) {
+      console.error("Error creating ride request:", error);
       toast({
-        title: "Driver Found!",
-        description: "Rahul is on the way to pick you up.",
+        title: "Error",
+        description: "Failed to create ride request. Please try again.",
+        variant: "destructive",
       });
-    }, 3000);
+      setRideStatus("idle");
+    }
   };
 
-  const handleCancelRide = () => {
+  const handleCancelRide = async () => {
+    // Update ride status in Supabase if needed
     setRideStatus("idle");
     toast({
       title: "Ride Cancelled",
       description: "Your ride request has been cancelled.",
     });
+  };
+
+  // Calculate ride fare based on distance (simplified calculation)
+  const calculateFare = (): number => {
+    if (!pickup || !dropoff) return 0;
+    
+    // Calculate distance using Haversine formula (simplified)
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const lat1 = pickup.coordinates[1];
+    const lon1 = pickup.coordinates[0];
+    const lat2 = dropoff.coordinates[1];
+    const lon2 = dropoff.coordinates[0];
+    
+    const R = 6371; // Radius of the Earth in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c; // Distance in km
+    
+    // Calculate fare (₹12 per km)
+    const fare = Math.round(distance * 12);
+    return fare;
   };
 
   // Calculate markers based on current state
@@ -75,7 +151,7 @@ const RiderDashboard = () => {
       
       markers.push({
         id: "driver",
-        lngLat: [driverLng, driverLat],
+        lngLat: [driverLng, driverLat] as [number, number],
         type: "driver" as const,
       });
     }
