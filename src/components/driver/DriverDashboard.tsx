@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -144,6 +145,10 @@ const DriverDashboard = () => {
   useEffect(() => {
     if (!isOnline || driverStatus !== "online") return;
 
+    // Initial fetch when going online
+    fetchAvailableRides();
+    
+    // Set up subscription to ride_requests changes
     const channel = supabase
       .channel('driver_available_rides')
       .on(
@@ -157,13 +162,22 @@ const DriverDashboard = () => {
         async (payload) => {
           console.log("Ride request change detected:", payload);
           
+          // Refresh the ride requests when a change is detected
           await fetchAvailableRides();
         }
       )
       .subscribe();
 
+    // Set up polling to periodically refresh available rides
+    const intervalId = setInterval(() => {
+      if (isOnline && driverStatus === "online") {
+        fetchAvailableRides();
+      }
+    }, 10000); // Poll every 10 seconds
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
   }, [isOnline, driverStatus]);
 
@@ -238,15 +252,18 @@ const DriverDashboard = () => {
 
   const fetchAvailableRides = async () => {
     try {
+      console.log("Fetching available rides...");
       const { data, error } = await supabase
         .from('ride_requests')
-        .select('*, profiles(*)')
+        .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
       }
+
+      console.log("Available rides data:", data);
 
       if (data) {
         const formattedRequests: RideRequest[] = await Promise.all(data.map(async (ride) => {
@@ -294,6 +311,7 @@ const DriverDashboard = () => {
           };
         }));
         
+        console.log("Formatted ride requests:", formattedRequests);
         setRideRequests(formattedRequests);
       }
     } catch (error) {
@@ -519,6 +537,13 @@ const DriverDashboard = () => {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-700">Waiting for Requests</h3>
                   <p className="text-gray-500 mt-1">You'll be notified when new rides are available</p>
+                  <Button 
+                    onClick={fetchAvailableRides} 
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    Refresh Requests
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
