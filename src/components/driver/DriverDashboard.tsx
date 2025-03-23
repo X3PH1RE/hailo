@@ -8,6 +8,7 @@ import { Check, Clock, MapPin, Navigation, Phone, Star, User, X } from "lucide-r
 import MapView from "@/components/map/MapView";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
 type DriverStatus = "offline" | "online" | "rideAccepted" | "pickingUp" | "inProgress" | "completed";
 
@@ -73,7 +74,14 @@ const DriverDashboard = () => {
         setIsOnline(true);
         setCurrentRideId(ride.id);
         
-        const riderLocation = ride.rider_location as LocationData | null;
+        let riderLongitude = 77.2150;
+        let riderLatitude = 28.6129;
+        
+        if (ride.rider_location && typeof ride.rider_location === 'object' && !Array.isArray(ride.rider_location)) {
+          const locationData = ride.rider_location as Record<string, Json>;
+          riderLongitude = typeof locationData.longitude === 'number' ? locationData.longitude : riderLongitude;
+          riderLatitude = typeof locationData.latitude === 'number' ? locationData.latitude : riderLatitude;
+        }
         
         const formattedRide: RideRequest = {
           id: ride.id,
@@ -83,9 +91,7 @@ const DriverDashboard = () => {
           },
           pickup: {
             name: ride.pickup_location,
-            coordinates: riderLocation ? 
-              [riderLocation.longitude, riderLocation.latitude] : 
-              [77.2150, 28.6129]
+            coordinates: [riderLongitude, riderLatitude]
           },
           dropoff: {
             name: ride.destination,
@@ -259,7 +265,14 @@ const DriverDashboard = () => {
             console.error("Error fetching rider profile:", error);
           }
           
-          const riderLocation = ride.rider_location as LocationData | null;
+          let riderLongitude = 77.2150;
+          let riderLatitude = 28.6129;
+          
+          if (ride.rider_location && typeof ride.rider_location === 'object' && !Array.isArray(ride.rider_location)) {
+            const locationData = ride.rider_location as Record<string, Json>;
+            riderLongitude = typeof locationData.longitude === 'number' ? locationData.longitude : riderLongitude;
+            riderLatitude = typeof locationData.latitude === 'number' ? locationData.latitude : riderLatitude;
+          }
           
           return {
             id: ride.id,
@@ -269,9 +282,7 @@ const DriverDashboard = () => {
             },
             pickup: {
               name: ride.pickup_location,
-              coordinates: riderLocation ? 
-                [riderLocation.longitude, riderLocation.latitude] : 
-                [77.2150, 28.6129]
+              coordinates: [riderLongitude, riderLatitude]
             },
             dropoff: {
               name: ride.destination,
@@ -307,7 +318,7 @@ const DriverDashboard = () => {
         return;
       }
       
-      const driverLocation: LocationData = {
+      const driverLocation: Record<string, number> = {
         longitude: 77.2090,
         latitude: 28.6139
       };

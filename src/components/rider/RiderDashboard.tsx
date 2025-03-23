@@ -7,6 +7,7 @@ import LocationSearch from "@/components/rider/LocationSearch";
 import RideDetails from "@/components/rider/RideDetails";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
 type RideStatus = "idle" | "searching" | "driverAssigned" | "enRoute" | "arrived" | "inProgress" | "completed";
 
@@ -58,14 +59,18 @@ const RiderDashboard = () => {
         const activeRide = rideRequests[0];
         setCurrentRideId(activeRide.id);
         
-        const riderLocation = activeRide.rider_location as LocationData | null;
+        let riderLongitude = 77.2090;
+        let riderLatitude = 28.6139;
+        
+        if (activeRide.rider_location && typeof activeRide.rider_location === 'object' && !Array.isArray(activeRide.rider_location)) {
+          const locationData = activeRide.rider_location as Record<string, Json>;
+          riderLongitude = typeof locationData.longitude === 'number' ? locationData.longitude : riderLongitude;
+          riderLatitude = typeof locationData.latitude === 'number' ? locationData.latitude : riderLatitude;
+        }
         
         setPickup({
           name: activeRide.pickup_location,
-          coordinates: [
-            riderLocation?.longitude || 77.2090, 
-            riderLocation?.latitude || 28.6139
-          ]
+          coordinates: [riderLongitude, riderLatitude]
         });
         
         setDropoff({
@@ -205,16 +210,19 @@ const RiderDashboard = () => {
       setRideStatus("searching");
 
       const estimatedPrice = calculateFare();
+      
+      const riderLocation: Record<string, number> = { 
+        longitude: pickup.coordinates[0], 
+        latitude: pickup.coordinates[1] 
+      };
+      
       const { data, error } = await supabase
         .from('ride_requests')
         .insert({
           rider_id: session.session.user.id,
           pickup_location: pickup.name,
           destination: dropoff.name,
-          rider_location: { 
-            longitude: pickup.coordinates[0], 
-            latitude: pickup.coordinates[1] 
-          },
+          rider_location: riderLocation,
           estimated_price: estimatedPrice,
           estimated_time: 5,
           ride_type: 'standard',
