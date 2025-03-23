@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +36,6 @@ const DriverDashboard = () => {
   const [currentRide, setCurrentRide] = useState<RideRequest | null>(null);
   const { toast } = useToast();
 
-  // Toggle driver online/offline status
   const toggleDriverStatus = () => {
     if (!isOnline) {
       setIsOnline(true);
@@ -47,7 +45,6 @@ const DriverDashboard = () => {
         description: "You'll start receiving ride requests.",
       });
       
-      // Simulate incoming ride requests
       setTimeout(() => {
         if (driverStatus === "online") {
           generateRideRequests();
@@ -64,7 +61,6 @@ const DriverDashboard = () => {
     }
   };
 
-  // Generate simulated ride requests
   const generateRideRequests = () => {
     const newRequests: RideRequest[] = [
       {
@@ -75,11 +71,11 @@ const DriverDashboard = () => {
         },
         pickup: {
           name: "University Library, North Campus",
-          coordinates: [77.2150, 28.6129], // Example coordinates
+          coordinates: [77.2150, 28.6129],
         },
         dropoff: {
           name: "Girls Hostel, South Campus",
-          coordinates: [77.2190, 28.6079], // Example coordinates
+          coordinates: [77.2190, 28.6079],
         },
         distance: "2.3 km",
         fare: "₹48",
@@ -93,11 +89,11 @@ const DriverDashboard = () => {
         },
         pickup: {
           name: "Engineering Building, Block B",
-          coordinates: [77.2130, 28.6169], // Example coordinates
+          coordinates: [77.2130, 28.6169],
         },
         dropoff: {
           name: "College Cafeteria",
-          coordinates: [77.2110, 28.6149], // Example coordinates
+          coordinates: [77.2110, 28.6149],
         },
         distance: "1.2 km",
         fare: "₹25",
@@ -108,7 +104,6 @@ const DriverDashboard = () => {
     setRideRequests(newRequests);
   };
 
-  // Accept a ride request
   const acceptRide = (ride: RideRequest) => {
     setCurrentRide(ride);
     setRideRequests([]);
@@ -120,7 +115,6 @@ const DriverDashboard = () => {
     });
   };
 
-  // Decline a ride request
   const declineRide = (rideId: string) => {
     setRideRequests(rideRequests.filter((ride) => ride.id !== rideId));
     
@@ -128,7 +122,6 @@ const DriverDashboard = () => {
       description: "Ride request declined",
     });
     
-    // Generate a new request after some time
     if (rideRequests.length === 1) {
       setTimeout(() => {
         if (driverStatus === "online") {
@@ -138,16 +131,13 @@ const DriverDashboard = () => {
     }
   };
 
-  // Calculate markers based on current state
   const getMapMarkers = () => {
     const markers = [];
     
     if (driverStatus !== "offline" && navigator.geolocation) {
-      // Driver's current location would normally come from GPS
-      // Here we're just using a fixed position for illustration
       markers.push({
         id: "driver",
-        lngLat: [77.2090, 28.6139], // Default Delhi location
+        lngLat: [77.2090, 28.6139],
         type: "driver" as const,
       });
     }
@@ -173,21 +163,17 @@ const DriverDashboard = () => {
     return markers;
   };
 
-  // Get route to draw
   const getRouteToDisplay = () => {
     if (!currentRide) return undefined;
     
     if (driverStatus === "rideAccepted" || driverStatus === "pickingUp") {
-      // Route from driver to pickup
-      // Fixed type issue with explicit tuple type for coordinates
       return {
-        start: [77.2090, 28.6139] as [number, number], // Driver location (would be dynamic in real app)
+        start: [77.2090, 28.6139] as [number, number],
         end: currentRide.pickup.coordinates,
       };
     }
     
     if (driverStatus === "inProgress") {
-      // Route from pickup to dropoff
       return {
         start: currentRide.pickup.coordinates,
         end: currentRide.dropoff.coordinates,
@@ -425,13 +411,10 @@ const DriverDashboard = () => {
                       setCurrentRide(null);
                       setDriverStatus("online");
                       
-                      // Generate new ride requests after a short delay
-                      setTimeout(() => {
-                        // Fix here: Compare with string literal, not variable
-                        if (driverStatus === "online") {
-                          generateRideRequests();
-                        }
-                      }, 3000);
+                      const status: DriverStatus = "online";
+                      if (status === "online") {
+                        generateRideRequests();
+                      }
                     }}
                   >
                     Find New Rides
@@ -449,7 +432,6 @@ const DriverDashboard = () => {
         zoom={14}
       />
       
-      {/* Driver Stats */}
       {driverStatus !== "offline" && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="bg-white">
