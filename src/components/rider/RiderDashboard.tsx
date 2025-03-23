@@ -15,25 +15,177 @@ const RiderDashboard = () => {
   const [rideStatus, setRideStatus] = useState<RideStatus>("idle");
   const [pickup, setPickup] = useState<{ name: string; coordinates: [number, number] } | null>(null);
   const [dropoff, setDropoff] = useState<{ name: string; coordinates: [number, number] } | null>(null);
+  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
+  const [driverInfo, setDriverInfo] = useState<{
+    name: string;
+    rating: number;
+    vehicle: string;
+    vehicleColor: string;
+    arrivalTime: string;
+  } | null>(null);
   const { toast } = useToast();
 
-  // Check for authenticated user
+  // Check for authenticated user and existing ride requests
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        // User is not authenticated
         toast({
           title: "Not logged in",
           description: "Please sign in to use the rider dashboard",
           variant: "destructive",
         });
+        return;
+      }
+
+      // Check for active ride requests
+      const { data: rideRequests, error } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('rider_id', data.session.user.id)
+        .in('status', ['pending', 'accepted', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error fetching ride requests:", error);
+        return;
+      }
+
+      if (rideRequests && rideRequests.length > 0) {
+        const activeRide = rideRequests[0];
+        setCurrentRideId(activeRide.id);
+        
+        // Set pickup and dropoff locations
+        setPickup({
+          name: activeRide.pickup_location,
+          coordinates: [
+            activeRide.rider_location?.longitude || 77.2090, 
+            activeRide.rider_location?.latitude || 28.6139
+          ]
+        });
+        
+        setDropoff({
+          name: activeRide.destination,
+          coordinates: [77.2190, 28.6079] // Default coordinates if not available
+        });
+
+        // Set ride status based on the stored status
+        switch(activeRide.status) {
+          case 'pending':
+            setRideStatus('searching');
+            break;
+          case 'accepted':
+            setRideStatus('driverAssigned');
+            // Fetch driver info if available
+            if (activeRide.driver_id) {
+              fetchDriverInfo(activeRide.driver_id);
+            }
+            break;
+          case 'in_progress':
+            setRideStatus('inProgress');
+            if (activeRide.driver_id) {
+              fetchDriverInfo(activeRide.driver_id);
+            }
+            break;
+          default:
+            setRideStatus('idle');
+        }
       }
     };
     
     checkAuth();
   }, [toast]);
-  
+
+  // Set up real-time subscription to ride status changes
+  useEffect(() => {
+    if (!currentRideId) return;
+
+    // Subscribe to changes for the current ride
+    const channel = supabase
+      .channel('ride_status_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ride_requests',
+          filter: `id=eq.${currentRideId}`
+        },
+        (payload) => {
+          const updatedRide = payload.new;
+          console.log("Ride updated in real-time:", updatedRide);
+          
+          // Update UI based on ride status changes
+          switch(updatedRide.status) {
+            case 'accepted':
+              setRideStatus('driverAssigned');
+              toast({
+                title: "Driver Found!",
+                description: "A driver has accepted your ride request.",
+              });
+              // Fetch driver info
+              if (updatedRide.driver_id) {
+                fetchDriverInfo(updatedRide.driver_id);
+              }
+              break;
+            case 'in_progress':
+              setRideStatus('inProgress');
+              break;
+            case 'completed':
+              setRideStatus('completed');
+              break;
+            case 'cancelled':
+              setRideStatus('idle');
+              setCurrentRideId(null);
+              toast({
+                title: "Ride Cancelled",
+                description: "Your ride has been cancelled.",
+                variant: "destructive"
+              });
+              break;
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentRideId, toast]);
+
+  const fetchDriverInfo = async (driverId: string) => {
+    // In a real app, fetch driver info from profiles table
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', driverId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching driver info:", error);
+      // Use default driver info
+      setDriverInfo({
+        name: "Driver",
+        rating: 4.8,
+        vehicle: "Honda Activa",
+        vehicleColor: "Blue",
+        arrivalTime: "5 min"
+      });
+      return;
+    }
+
+    if (data) {
+      setDriverInfo({
+        name: data.full_name || "Driver",
+        rating: 4.8, // Default rating
+        vehicle: "Honda Activa", // This would come from a vehicles table in a real app
+        vehicleColor: "Blue",
+        arrivalTime: "5 min"
+      });
+    }
+  };
+
   const handleRequestRide = async () => {
     if (!pickup || !dropoff) {
       toast({
@@ -44,41 +196,51 @@ const RiderDashboard = () => {
       return;
     }
 
-    setRideStatus("searching");
-
     try {
-      // Save ride request to Supabase
+      // Check if user is logged in
       const { data: session } = await supabase.auth.getSession();
-      if (session.session) {
-        const { error } = await supabase
-          .from('ride_requests')
-          .insert({
-            rider_id: session.session.user.id,
-            pickup_location: pickup.name,
-            destination: dropoff.name,
-            rider_location: { 
-              longitude: pickup.coordinates[0], 
-              latitude: pickup.coordinates[1] 
-            },
-            estimated_price: calculateFare(),
-            estimated_time: 5, // 5 minutes
-            ride_type: 'standard',
-            status: 'pending'
-          });
-
-        if (error) {
-          throw error;
-        }
+      if (!session.session) {
+        toast({
+          title: "Not logged in",
+          description: "Please sign in to request a ride",
+          variant: "destructive",
+        });
+        return;
       }
 
-      // Simulate finding a driver after 3 seconds
-      setTimeout(() => {
-        setRideStatus("driverAssigned");
-        toast({
-          title: "Driver Found!",
-          description: "Rahul is on the way to pick you up.",
-        });
-      }, 3000);
+      setRideStatus("searching");
+
+      // Save ride request to Supabase
+      const estimatedPrice = calculateFare();
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .insert({
+          rider_id: session.session.user.id,
+          pickup_location: pickup.name,
+          destination: dropoff.name,
+          rider_location: { 
+            longitude: pickup.coordinates[0], 
+            latitude: pickup.coordinates[1] 
+          },
+          estimated_price: estimatedPrice,
+          estimated_time: 5, // 5 minutes
+          ride_type: 'standard',
+          status: 'pending'
+        })
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setCurrentRideId(data[0].id);
+      }
+
+      toast({
+        title: "Ride Requested",
+        description: "Looking for drivers near you...",
+      });
     } catch (error) {
       console.error("Error creating ride request:", error);
       toast({
@@ -91,12 +253,89 @@ const RiderDashboard = () => {
   };
 
   const handleCancelRide = async () => {
-    // Update ride status in Supabase if needed
+    if (!currentRideId) {
+      setRideStatus("idle");
+      return;
+    }
+
+    try {
+      // Update ride status in Supabase
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', currentRideId);
+
+      if (error) {
+        throw error;
+      }
+
+      setCurrentRideId(null);
+      setRideStatus("idle");
+      toast({
+        title: "Ride Cancelled",
+        description: "Your ride request has been cancelled.",
+      });
+    } catch (error) {
+      console.error("Error cancelling ride:", error);
+      toast({
+        title: "Error",
+        description: "Failed to cancel ride. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmPickup = async () => {
+    if (!currentRideId) return;
+
+    try {
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ status: 'in_progress' })
+        .eq('id', currentRideId);
+
+      if (error) {
+        throw error;
+      }
+
+      setRideStatus("inProgress");
+    } catch (error) {
+      console.error("Error updating ride status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update ride status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConfirmDropoff = async () => {
+    if (!currentRideId) return;
+
+    try {
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ status: 'completed' })
+        .eq('id', currentRideId);
+
+      if (error) {
+        throw error;
+      }
+
+      setRideStatus("completed");
+    } catch (error) {
+      console.error("Error completing ride:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete ride. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCompleteRide = () => {
+    setCurrentRideId(null);
     setRideStatus("idle");
-    toast({
-      title: "Ride Cancelled",
-      description: "Your ride request has been cancelled.",
-    });
   };
 
   // Calculate ride fare based on distance (simplified calculation)
@@ -223,17 +462,17 @@ const RiderDashboard = () => {
               rideStatus={rideStatus}
               pickup={pickup}
               dropoff={dropoff}
-              driverInfo={rideStatus !== "searching" ? {
-                name: "Rahul",
+              driverInfo={driverInfo || (rideStatus !== "searching" ? {
+                name: "Driver",
                 rating: 4.8,
                 vehicle: "Honda Activa",
                 vehicleColor: "Blue",
                 arrivalTime: "5 min"
-              } : undefined}
+              } : undefined)}
               onCancel={handleCancelRide}
-              onConfirmPickup={() => setRideStatus("inProgress")}
-              onConfirmDropoff={() => setRideStatus("completed")}
-              onComplete={() => setRideStatus("idle")}
+              onConfirmPickup={handleConfirmPickup}
+              onConfirmDropoff={handleConfirmDropoff}
+              onComplete={handleCompleteRide}
             />
           )}
         </CardContent>

@@ -36,9 +36,10 @@ const DriverDashboard = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [currentRide, setCurrentRide] = useState<RideRequest | null>(null);
+  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Check for authenticated user
+  // Check for authenticated user and active rides
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
@@ -49,14 +50,178 @@ const DriverDashboard = () => {
           description: "Please sign in to use the driver dashboard",
           variant: "destructive",
         });
+        return;
+      }
+
+      // Check for existing active rides for this driver
+      const { data: activeRides, error } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('driver_id', data.session.user.id)
+        .in('status', ['accepted', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error fetching active rides:", error);
+        return;
+      }
+
+      if (activeRides && activeRides.length > 0) {
+        // Driver has an active ride
+        const ride = activeRides[0];
+        setIsOnline(true);
+        setCurrentRideId(ride.id);
+        
+        // Convert database ride to UI format
+        const formattedRide: RideRequest = {
+          id: ride.id,
+          rider: {
+            name: "Rider", // Will be replaced with actual rider name in fetchRiderInfo
+            rating: 4.7,
+          },
+          pickup: {
+            name: ride.pickup_location,
+            coordinates: ride.rider_location ? 
+              [ride.rider_location.longitude, ride.rider_location.latitude] : 
+              [77.2150, 28.6129] // Default coordinates if not available
+          },
+          dropoff: {
+            name: ride.destination,
+            coordinates: [77.2190, 28.6079] // Default coordinates, would be actual in a real app
+          },
+          distance: "2.3 km", // Calculate this in real app
+          fare: `₹${ride.estimated_price}`,
+          timestamp: new Date(ride.created_at)
+        };
+        
+        setCurrentRide(formattedRide);
+        
+        // Set driver status based on ride status
+        if (ride.status === 'accepted') {
+          setDriverStatus('rideAccepted');
+        } else if (ride.status === 'in_progress') {
+          setDriverStatus('inProgress');
+        }
+        
+        // Fetch rider information
+        fetchRiderInfo(ride.rider_id, formattedRide);
       }
     };
     
     checkAuth();
   }, [toast]);
 
-  const toggleDriverStatus = () => {
+  const fetchRiderInfo = async (riderId: string, formattedRide: RideRequest) => {
+    // Fetch rider profile data
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', riderId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching rider info:", error);
+      return;
+    }
+
+    if (data) {
+      // Update the rider info in the current ride
+      const updatedRide = {
+        ...formattedRide,
+        rider: {
+          ...formattedRide.rider,
+          name: data.full_name || "Rider"
+        }
+      };
+      setCurrentRide(updatedRide);
+    }
+  };
+
+  // Listen for real-time changes in ride requests
+  useEffect(() => {
+    if (!isOnline || driverStatus !== "online") return;
+
+    // Subscribe to new pending ride requests
+    const channel = supabase
+      .channel('driver_available_rides')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ride_requests',
+          filter: `status=eq.pending`
+        },
+        async (payload) => {
+          console.log("Ride request change detected:", payload);
+          
+          // Refresh all pending ride requests
+          await fetchAvailableRides();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOnline, driverStatus]);
+
+  // Listen for changes to the current ride
+  useEffect(() => {
+    if (!currentRideId) return;
+
+    // Subscribe to changes for the current ride
+    const channel = supabase
+      .channel('driver_current_ride')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ride_requests',
+          filter: `id=eq.${currentRideId}`
+        },
+        (payload) => {
+          const updatedRide = payload.new;
+          console.log("Current ride updated:", updatedRide);
+          
+          // Update ride status if needed
+          if (updatedRide.status === 'in_progress' && driverStatus === 'rideAccepted') {
+            setDriverStatus('inProgress');
+          } else if (updatedRide.status === 'completed') {
+            setDriverStatus('completed');
+          } else if (updatedRide.status === 'cancelled') {
+            toast({
+              title: "Ride Cancelled",
+              description: "The rider has cancelled this ride.",
+              variant: "destructive"
+            });
+            // Reset current ride and go back online
+            resetRideState();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentRideId, driverStatus, toast]);
+
+  const toggleDriverStatus = async () => {
     if (!isOnline) {
+      // Check if user is logged in
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        toast({
+          title: "Not logged in",
+          description: "Please sign in to use the driver dashboard",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       setIsOnline(true);
       setDriverStatus("online");
       toast({
@@ -64,11 +229,8 @@ const DriverDashboard = () => {
         description: "You'll start receiving ride requests.",
       });
       
-      setTimeout(() => {
-        if (driverStatus === "online") {
-          generateRideRequests();
-        }
-      }, 3000);
+      // Fetch available rides
+      fetchAvailableRides();
     } else {
       setIsOnline(false);
       setDriverStatus("offline");
@@ -80,58 +242,119 @@ const DriverDashboard = () => {
     }
   };
 
-  const generateRideRequests = () => {
-    const newRequests: RideRequest[] = [
-      {
-        id: "r1",
-        rider: {
-          name: "Priya",
-          rating: 4.7,
-        },
-        pickup: {
-          name: "University Library, North Campus",
-          coordinates: [77.2150, 28.6129],
-        },
-        dropoff: {
-          name: "Girls Hostel, South Campus",
-          coordinates: [77.2190, 28.6079],
-        },
-        distance: "2.3 km",
-        fare: "₹48",
-        timestamp: new Date(),
-      },
-      {
-        id: "r2",
-        rider: {
-          name: "Vikram",
-          rating: 4.3,
-        },
-        pickup: {
-          name: "Engineering Building, Block B",
-          coordinates: [77.2130, 28.6169],
-        },
-        dropoff: {
-          name: "College Cafeteria",
-          coordinates: [77.2110, 28.6149],
-        },
-        distance: "1.2 km",
-        fare: "₹25",
-        timestamp: new Date(),
-      },
-    ];
-    
-    setRideRequests(newRequests);
+  const fetchAvailableRides = async () => {
+    try {
+      // Fetch pending ride requests from Supabase
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .select('*, profiles(*)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Transform database rides to the format needed for UI
+        const formattedRequests: RideRequest[] = await Promise.all(data.map(async (ride) => {
+          // Fetch rider profile if available
+          let riderName = "Rider";
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', ride.rider_id)
+              .single();
+              
+            if (profileData) {
+              riderName = profileData.full_name || "Rider";
+            }
+          } catch (error) {
+            console.error("Error fetching rider profile:", error);
+          }
+          
+          return {
+            id: ride.id,
+            rider: {
+              name: riderName,
+              rating: 4.7 // Default rating
+            },
+            pickup: {
+              name: ride.pickup_location,
+              coordinates: ride.rider_location ? 
+                [ride.rider_location.longitude, ride.rider_location.latitude] : 
+                [77.2150, 28.6129] // Default coordinates if not available
+            },
+            dropoff: {
+              name: ride.destination,
+              coordinates: [77.2190, 28.6079] // Default coordinates
+            },
+            distance: "2.3 km", // Calculate this in real app
+            fare: `₹${ride.estimated_price}`,
+            timestamp: new Date(ride.created_at)
+          };
+        }));
+        
+        setRideRequests(formattedRequests);
+      }
+    } catch (error) {
+      console.error("Error fetching ride requests:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch ride requests.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const acceptRide = (ride: RideRequest) => {
-    setCurrentRide(ride);
-    setRideRequests([]);
-    setDriverStatus("rideAccepted");
-    
-    toast({
-      title: "Ride Accepted",
-      description: `Navigating to pick up ${ride.rider.name}`,
-    });
+  const acceptRide = async (ride: RideRequest) => {
+    try {
+      // Check for user session
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        toast({
+          title: "Not logged in",
+          description: "Please sign in to accept rides",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Update ride in Supabase
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({
+          driver_id: session.session.user.id,
+          status: 'accepted',
+          driver_location: {
+            longitude: 77.2090,
+            latitude: 28.6139
+          } // Default driver location
+        })
+        .eq('id', ride.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setCurrentRide(ride);
+      setCurrentRideId(ride.id);
+      setRideRequests([]);
+      setDriverStatus("rideAccepted");
+      
+      toast({
+        title: "Ride Accepted",
+        description: `Navigating to pick up ${ride.rider.name}`,
+      });
+    } catch (error) {
+      console.error("Error accepting ride:", error);
+      toast({
+        title: "Error",
+        description: "Failed to accept ride. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const declineRide = (rideId: string) => {
@@ -140,16 +363,61 @@ const DriverDashboard = () => {
     toast({
       description: "Ride request declined",
     });
+  };
+
+  const confirmPickup = async () => {
+    if (!currentRideId) return;
     
-    if (rideRequests.length === 1) {
-      setTimeout(() => {
-        // Using a constant here to avoid TypeScript error with string comparison
-        const targetStatus: DriverStatus = "online";
-        if (driverStatus === targetStatus) {
-          generateRideRequests();
-        }
-      }, 5000);
+    try {
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ status: 'in_progress' })
+        .eq('id', currentRideId);
+
+      if (error) {
+        throw error;
+      }
+
+      setDriverStatus("inProgress");
+    } catch (error) {
+      console.error("Error updating ride status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update ride status. Please try again.",
+        variant: "destructive",
+      });
     }
+  };
+
+  const completeRide = async () => {
+    if (!currentRideId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ status: 'completed' })
+        .eq('id', currentRideId);
+
+      if (error) {
+        throw error;
+      }
+
+      setDriverStatus("completed");
+    } catch (error) {
+      console.error("Error completing ride:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete ride. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetRideState = () => {
+    setCurrentRide(null);
+    setCurrentRideId(null);
+    setDriverStatus("online");
+    fetchAvailableRides();
   };
 
   const getMapMarkers = () => {
@@ -410,7 +678,7 @@ const DriverDashboard = () => {
                 {driverStatus === "rideAccepted" && (
                   <Button
                     className="bg-blue-600 hover:bg-blue-700"
-                    onClick={() => setDriverStatus("inProgress")}
+                    onClick={confirmPickup}
                   >
                     Confirm Pickup
                   </Button>
@@ -419,7 +687,7 @@ const DriverDashboard = () => {
                 {driverStatus === "inProgress" && (
                   <Button
                     className="bg-green-600 hover:bg-green-700"
-                    onClick={() => setDriverStatus("completed")}
+                    onClick={completeRide}
                   >
                     Complete Ride
                   </Button>
@@ -428,15 +696,7 @@ const DriverDashboard = () => {
                 {driverStatus === "completed" && (
                   <Button
                     className="bg-purple-600 hover:bg-purple-700"
-                    onClick={() => {
-                      setCurrentRide(null);
-                      setDriverStatus("online");
-                      
-                      const status: DriverStatus = "online";
-                      if (status === "online") {
-                        generateRideRequests();
-                      }
-                    }}
+                    onClick={resetRideState}
                   >
                     Find New Rides
                   </Button>
