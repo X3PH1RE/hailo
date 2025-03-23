@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Bell, Menu, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   isLoggedIn: boolean;
@@ -17,6 +20,39 @@ interface HeaderProps {
 
 const Header = ({ isLoggedIn }: HeaderProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    setIsMenuOpen(false);
+  };
+
+  const handleSignIn = () => {
+    navigate("/");
+    toast({
+      title: "Sign in",
+      description: "Please sign in to continue",
+    });
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      toast({
+        title: "Error signing out",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out."
+      });
+      navigate("/");
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -24,15 +60,15 @@ const Header = ({ isLoggedIn }: HeaderProps) => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <h1 className="text-2xl font-bold text-purple-800">Hailo</h1>
+            <h1 className="text-2xl font-bold text-purple-800 cursor-pointer" onClick={() => handleNavigate("/")}>Hailo</h1>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
             {isLoggedIn ? (
               <>
-                <Button variant="ghost" size="sm">Ride History</Button>
-                <Button variant="ghost" size="sm">Help</Button>
+                <Button variant="ghost" size="sm" onClick={() => handleNavigate("/history")}>Ride History</Button>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/help")}>Help</Button>
                 
                 {/* Notifications */}
                 <Button variant="ghost" size="icon" className="relative">
@@ -51,15 +87,20 @@ const Header = ({ isLoggedIn }: HeaderProps) => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Settings</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleNavigate("/profile")}>Profile</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleNavigate("/settings")}>Settings</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>Log out</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSignOut}>Log out</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
             ) : (
-              <Button variant="default" size="sm" className="bg-purple-600 hover:bg-purple-700">
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="bg-purple-600 hover:bg-purple-700"
+                onClick={handleSignIn}
+              >
                 Sign In
               </Button>
             )}
@@ -90,14 +131,15 @@ const Header = ({ isLoggedIn }: HeaderProps) => {
                   </div>
                 </div>
                 
-                <Button variant="ghost" className="justify-start px-2">Ride History</Button>
-                <Button variant="ghost" className="justify-start px-2">Notifications</Button>
-                <Button variant="ghost" className="justify-start px-2">Help</Button>
-                <Button variant="ghost" className="justify-start px-2">Settings</Button>
-                <Button variant="ghost" className="justify-start px-2 text-red-600">Log out</Button>
+                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/history")}>Ride History</Button>
+                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/notifications")}>Notifications</Button>
+                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/help")}>Help</Button>
+                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/profile")}>Profile</Button>
+                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/settings")}>Settings</Button>
+                <Button variant="ghost" className="justify-start px-2 text-red-600" onClick={handleSignOut}>Log out</Button>
               </>
             ) : (
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">Sign In</Button>
+              <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={handleSignIn}>Sign In</Button>
             )}
           </nav>
         </div>
