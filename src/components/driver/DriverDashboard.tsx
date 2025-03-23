@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +10,11 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 type DriverStatus = "offline" | "online" | "rideAccepted" | "pickingUp" | "inProgress" | "completed";
+
+interface LocationData {
+  longitude: number;
+  latitude: number;
+}
 
 interface RideRequest {
   id: string;
@@ -39,12 +43,10 @@ const DriverDashboard = () => {
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Check for authenticated user and active rides
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        // User is not authenticated
         toast({
           title: "Not logged in",
           description: "Please sign in to use the driver dashboard",
@@ -53,7 +55,6 @@ const DriverDashboard = () => {
         return;
       }
 
-      // Check for existing active rides for this driver
       const { data: activeRides, error } = await supabase
         .from('ride_requests')
         .select('*')
@@ -68,43 +69,41 @@ const DriverDashboard = () => {
       }
 
       if (activeRides && activeRides.length > 0) {
-        // Driver has an active ride
         const ride = activeRides[0];
         setIsOnline(true);
         setCurrentRideId(ride.id);
         
-        // Convert database ride to UI format
+        const riderLocation = ride.rider_location as LocationData | null;
+        
         const formattedRide: RideRequest = {
           id: ride.id,
           rider: {
-            name: "Rider", // Will be replaced with actual rider name in fetchRiderInfo
+            name: "Rider",
             rating: 4.7,
           },
           pickup: {
             name: ride.pickup_location,
-            coordinates: ride.rider_location ? 
-              [ride.rider_location.longitude, ride.rider_location.latitude] : 
-              [77.2150, 28.6129] // Default coordinates if not available
+            coordinates: riderLocation ? 
+              [riderLocation.longitude, riderLocation.latitude] : 
+              [77.2150, 28.6129]
           },
           dropoff: {
             name: ride.destination,
-            coordinates: [77.2190, 28.6079] // Default coordinates, would be actual in a real app
+            coordinates: [77.2190, 28.6079]
           },
-          distance: "2.3 km", // Calculate this in real app
+          distance: "2.3 km",
           fare: `₹${ride.estimated_price}`,
           timestamp: new Date(ride.created_at)
         };
         
         setCurrentRide(formattedRide);
         
-        // Set driver status based on ride status
         if (ride.status === 'accepted') {
           setDriverStatus('rideAccepted');
         } else if (ride.status === 'in_progress') {
           setDriverStatus('inProgress');
         }
         
-        // Fetch rider information
         fetchRiderInfo(ride.rider_id, formattedRide);
       }
     };
@@ -113,7 +112,6 @@ const DriverDashboard = () => {
   }, [toast]);
 
   const fetchRiderInfo = async (riderId: string, formattedRide: RideRequest) => {
-    // Fetch rider profile data
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -126,7 +124,6 @@ const DriverDashboard = () => {
     }
 
     if (data) {
-      // Update the rider info in the current ride
       const updatedRide = {
         ...formattedRide,
         rider: {
@@ -138,11 +135,9 @@ const DriverDashboard = () => {
     }
   };
 
-  // Listen for real-time changes in ride requests
   useEffect(() => {
     if (!isOnline || driverStatus !== "online") return;
 
-    // Subscribe to new pending ride requests
     const channel = supabase
       .channel('driver_available_rides')
       .on(
@@ -156,7 +151,6 @@ const DriverDashboard = () => {
         async (payload) => {
           console.log("Ride request change detected:", payload);
           
-          // Refresh all pending ride requests
           await fetchAvailableRides();
         }
       )
@@ -167,11 +161,9 @@ const DriverDashboard = () => {
     };
   }, [isOnline, driverStatus]);
 
-  // Listen for changes to the current ride
   useEffect(() => {
     if (!currentRideId) return;
 
-    // Subscribe to changes for the current ride
     const channel = supabase
       .channel('driver_current_ride')
       .on(
@@ -186,7 +178,6 @@ const DriverDashboard = () => {
           const updatedRide = payload.new;
           console.log("Current ride updated:", updatedRide);
           
-          // Update ride status if needed
           if (updatedRide.status === 'in_progress' && driverStatus === 'rideAccepted') {
             setDriverStatus('inProgress');
           } else if (updatedRide.status === 'completed') {
@@ -197,7 +188,6 @@ const DriverDashboard = () => {
               description: "The rider has cancelled this ride.",
               variant: "destructive"
             });
-            // Reset current ride and go back online
             resetRideState();
           }
         }
@@ -211,7 +201,6 @@ const DriverDashboard = () => {
 
   const toggleDriverStatus = async () => {
     if (!isOnline) {
-      // Check if user is logged in
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         toast({
@@ -229,7 +218,6 @@ const DriverDashboard = () => {
         description: "You'll start receiving ride requests.",
       });
       
-      // Fetch available rides
       fetchAvailableRides();
     } else {
       setIsOnline(false);
@@ -244,7 +232,6 @@ const DriverDashboard = () => {
 
   const fetchAvailableRides = async () => {
     try {
-      // Fetch pending ride requests from Supabase
       const { data, error } = await supabase
         .from('ride_requests')
         .select('*, profiles(*)')
@@ -256,9 +243,7 @@ const DriverDashboard = () => {
       }
 
       if (data) {
-        // Transform database rides to the format needed for UI
         const formattedRequests: RideRequest[] = await Promise.all(data.map(async (ride) => {
-          // Fetch rider profile if available
           let riderName = "Rider";
           try {
             const { data: profileData } = await supabase
@@ -274,23 +259,25 @@ const DriverDashboard = () => {
             console.error("Error fetching rider profile:", error);
           }
           
+          const riderLocation = ride.rider_location as LocationData | null;
+          
           return {
             id: ride.id,
             rider: {
               name: riderName,
-              rating: 4.7 // Default rating
+              rating: 4.7
             },
             pickup: {
               name: ride.pickup_location,
-              coordinates: ride.rider_location ? 
-                [ride.rider_location.longitude, ride.rider_location.latitude] : 
-                [77.2150, 28.6129] // Default coordinates if not available
+              coordinates: riderLocation ? 
+                [riderLocation.longitude, riderLocation.latitude] : 
+                [77.2150, 28.6129]
             },
             dropoff: {
               name: ride.destination,
-              coordinates: [77.2190, 28.6079] // Default coordinates
+              coordinates: [77.2190, 28.6079]
             },
-            distance: "2.3 km", // Calculate this in real app
+            distance: "2.3 km",
             fare: `₹${ride.estimated_price}`,
             timestamp: new Date(ride.created_at)
           };
@@ -310,7 +297,6 @@ const DriverDashboard = () => {
 
   const acceptRide = async (ride: RideRequest) => {
     try {
-      // Check for user session
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
         toast({
@@ -321,16 +307,17 @@ const DriverDashboard = () => {
         return;
       }
       
-      // Update ride in Supabase
+      const driverLocation: LocationData = {
+        longitude: 77.2090,
+        latitude: 28.6139
+      };
+      
       const { error } = await supabase
         .from('ride_requests')
         .update({
           driver_id: session.session.user.id,
           status: 'accepted',
-          driver_location: {
-            longitude: 77.2090,
-            latitude: 28.6139
-          } // Default driver location
+          driver_location: driverLocation
         })
         .eq('id', ride.id);
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 type RideStatus = "idle" | "searching" | "driverAssigned" | "enRoute" | "arrived" | "inProgress" | "completed";
+
+interface LocationData {
+  longitude: number;
+  latitude: number;
+}
 
 const RiderDashboard = () => {
   const [rideStatus, setRideStatus] = useState<RideStatus>("idle");
@@ -25,7 +29,6 @@ const RiderDashboard = () => {
   } | null>(null);
   const { toast } = useToast();
 
-  // Check for authenticated user and existing ride requests
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
@@ -38,7 +41,6 @@ const RiderDashboard = () => {
         return;
       }
 
-      // Check for active ride requests
       const { data: rideRequests, error } = await supabase
         .from('ride_requests')
         .select('*')
@@ -56,12 +58,13 @@ const RiderDashboard = () => {
         const activeRide = rideRequests[0];
         setCurrentRideId(activeRide.id);
         
-        // Set pickup and dropoff locations
+        const riderLocation = activeRide.rider_location as LocationData | null;
+        
         setPickup({
           name: activeRide.pickup_location,
           coordinates: [
-            activeRide.rider_location?.longitude || 77.2090, 
-            activeRide.rider_location?.latitude || 28.6139
+            riderLocation?.longitude || 77.2090, 
+            riderLocation?.latitude || 28.6139
           ]
         });
         
@@ -70,14 +73,12 @@ const RiderDashboard = () => {
           coordinates: [77.2190, 28.6079] // Default coordinates if not available
         });
 
-        // Set ride status based on the stored status
         switch(activeRide.status) {
           case 'pending':
             setRideStatus('searching');
             break;
           case 'accepted':
             setRideStatus('driverAssigned');
-            // Fetch driver info if available
             if (activeRide.driver_id) {
               fetchDriverInfo(activeRide.driver_id);
             }
@@ -97,11 +98,9 @@ const RiderDashboard = () => {
     checkAuth();
   }, [toast]);
 
-  // Set up real-time subscription to ride status changes
   useEffect(() => {
     if (!currentRideId) return;
 
-    // Subscribe to changes for the current ride
     const channel = supabase
       .channel('ride_status_changes')
       .on(
@@ -116,7 +115,6 @@ const RiderDashboard = () => {
           const updatedRide = payload.new;
           console.log("Ride updated in real-time:", updatedRide);
           
-          // Update UI based on ride status changes
           switch(updatedRide.status) {
             case 'accepted':
               setRideStatus('driverAssigned');
@@ -124,7 +122,6 @@ const RiderDashboard = () => {
                 title: "Driver Found!",
                 description: "A driver has accepted your ride request.",
               });
-              // Fetch driver info
               if (updatedRide.driver_id) {
                 fetchDriverInfo(updatedRide.driver_id);
               }
@@ -155,7 +152,6 @@ const RiderDashboard = () => {
   }, [currentRideId, toast]);
 
   const fetchDriverInfo = async (driverId: string) => {
-    // In a real app, fetch driver info from profiles table
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -164,7 +160,6 @@ const RiderDashboard = () => {
 
     if (error) {
       console.error("Error fetching driver info:", error);
-      // Use default driver info
       setDriverInfo({
         name: "Driver",
         rating: 4.8,
@@ -178,8 +173,8 @@ const RiderDashboard = () => {
     if (data) {
       setDriverInfo({
         name: data.full_name || "Driver",
-        rating: 4.8, // Default rating
-        vehicle: "Honda Activa", // This would come from a vehicles table in a real app
+        rating: 4.8,
+        vehicle: "Honda Activa",
         vehicleColor: "Blue",
         arrivalTime: "5 min"
       });
@@ -197,7 +192,6 @@ const RiderDashboard = () => {
     }
 
     try {
-      // Check if user is logged in
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
         toast({
@@ -210,7 +204,6 @@ const RiderDashboard = () => {
 
       setRideStatus("searching");
 
-      // Save ride request to Supabase
       const estimatedPrice = calculateFare();
       const { data, error } = await supabase
         .from('ride_requests')
@@ -223,7 +216,7 @@ const RiderDashboard = () => {
             latitude: pickup.coordinates[1] 
           },
           estimated_price: estimatedPrice,
-          estimated_time: 5, // 5 minutes
+          estimated_time: 5,
           ride_type: 'standard',
           status: 'pending'
         })
@@ -259,7 +252,6 @@ const RiderDashboard = () => {
     }
 
     try {
-      // Update ride status in Supabase
       const { error } = await supabase
         .from('ride_requests')
         .update({ status: 'cancelled' })
@@ -338,32 +330,28 @@ const RiderDashboard = () => {
     setRideStatus("idle");
   };
 
-  // Calculate ride fare based on distance (simplified calculation)
   const calculateFare = (): number => {
     if (!pickup || !dropoff) return 0;
     
-    // Calculate distance using Haversine formula (simplified)
     const toRad = (value: number) => (value * Math.PI) / 180;
     const lat1 = pickup.coordinates[1];
     const lon1 = pickup.coordinates[0];
     const lat2 = dropoff.coordinates[1];
     const lon2 = dropoff.coordinates[0];
     
-    const R = 6371; // Radius of the Earth in km
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in km
+    const distance = R * c;
     
-    // Calculate fare (₹12 per km)
     const fare = Math.round(distance * 12);
     return fare;
   };
 
-  // Calculate markers based on current state
   const getMapMarkers = () => {
     const markers = [];
     
@@ -384,7 +372,6 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      // Simulate driver location (slightly away from pickup)
       const driverLng = pickup ? pickup.coordinates[0] + 0.005 : 0;
       const driverLat = pickup ? pickup.coordinates[1] + 0.005 : 0;
       
@@ -398,12 +385,10 @@ const RiderDashboard = () => {
     return markers;
   };
 
-  // Get route to draw
   const getRouteToDisplay = () => {
     if (!pickup || !dropoff) return undefined;
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      // Draw route from driver to pickup
       const driverLng = pickup.coordinates[0] + 0.005;
       const driverLat = pickup.coordinates[1] + 0.005;
       return {
@@ -413,7 +398,6 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "inProgress") {
-      // Draw route from pickup to dropoff
       return {
         start: pickup.coordinates,
         end: dropoff.coordinates,
@@ -484,7 +468,6 @@ const RiderDashboard = () => {
         zoom={14}
       />
 
-      {/* Bottom cards for quick actions */}
       {rideStatus === "idle" && (
         <div className="grid grid-cols-2 gap-4">
           <Card className="bg-white shadow-sm hover:shadow transition-shadow cursor-pointer">
