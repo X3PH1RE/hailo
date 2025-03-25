@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,7 +6,7 @@ import { MapPin, Search, Clock, Navigation } from "lucide-react";
 import MapView from "@/components/map/MapView";
 import LocationSearch from "@/components/rider/LocationSearch";
 import RideDetails from "@/components/rider/RideDetails";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 
@@ -43,6 +44,9 @@ const RiderDashboard = () => {
         return;
       }
 
+      console.log("Checking for active ride requests for user:", data.session.user.id);
+      
+      // Check if there's an active ride request for this user
       const { data: rideRequests, error } = await supabase
         .from('ride_requests')
         .select('*')
@@ -55,6 +59,8 @@ const RiderDashboard = () => {
         console.error("Error fetching ride requests:", error);
         return;
       }
+
+      console.log("Active ride requests:", rideRequests);
 
       if (rideRequests && rideRequests.length > 0) {
         const activeRide = rideRequests[0];
@@ -83,6 +89,8 @@ const RiderDashboard = () => {
 
         setEstimatedFare(activeRide.estimated_price);
 
+        console.log("Active ride status:", activeRide.status);
+        
         switch(activeRide.status) {
           case 'pending':
             setRideStatus('searching');
@@ -113,12 +121,25 @@ const RiderDashboard = () => {
     pickupLat: number, 
     destinationName: string
   ): [number, number] => {
-    const randomOffsetLng = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
-    const randomOffsetLat = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
+    // Generate a consistent offset based on destination name for same-name destinations
+    // to have the same coordinates in different sessions
+    let hash = 0;
+    for (let i = 0; i < destinationName.length; i++) {
+      hash = ((hash << 5) - hash) + destinationName.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    // Use the hash to generate a consistent offset between 0.005 and 0.02
+    const offsetLngFactor = (Math.abs(hash % 100) / 100) * 0.015 + 0.005;
+    const offsetLatFactor = (Math.abs((hash >> 8) % 100) / 100) * 0.015 + 0.005;
+    
+    // Determine direction based on hash
+    const lngDirection = hash % 2 === 0 ? 1 : -1;
+    const latDirection = (hash >> 1) % 2 === 0 ? 1 : -1;
     
     return [
-      pickupLng + randomOffsetLng,
-      pickupLat + randomOffsetLat
+      pickupLng + (offsetLngFactor * lngDirection),
+      pickupLat + (offsetLatFactor * latDirection)
     ];
   };
 
@@ -127,8 +148,9 @@ const RiderDashboard = () => {
 
     console.log("Setting up real-time updates for ride:", currentRideId);
     
+    // Improved subscription to ride_requests changes
     const channel = supabase
-      .channel('ride_status_changes')
+      .channel(`ride_status_${currentRideId}`)
       .on(
         'postgres_changes',
         {
@@ -138,39 +160,54 @@ const RiderDashboard = () => {
           filter: `id=eq.${currentRideId}`
         },
         (payload) => {
+          console.log("Ride update received in real-time:", payload);
           const updatedRide = payload.new;
-          console.log("Ride updated in real-time:", updatedRide);
           
-          switch(updatedRide.status) {
-            case 'accepted':
-              setRideStatus('driverAssigned');
-              toast({
-                title: "Driver Found!",
-                description: "A driver has accepted your ride request.",
-              });
-              if (updatedRide.driver_id) {
-                fetchDriverInfo(updatedRide.driver_id);
-              }
-              break;
-            case 'in_progress':
-              setRideStatus('inProgress');
-              break;
-            case 'completed':
-              setRideStatus('completed');
-              break;
-            case 'cancelled':
-              setRideStatus('idle');
-              setCurrentRideId(null);
-              toast({
-                title: "Ride Cancelled",
-                description: "Your ride has been cancelled.",
-                variant: "destructive"
-              });
-              break;
+          // Process status changes
+          if (updatedRide.status) {
+            console.log(`Status changed to: ${updatedRide.status}`);
+            
+            switch(updatedRide.status) {
+              case 'accepted':
+                setRideStatus('driverAssigned');
+                toast({
+                  title: "Driver Found!",
+                  description: "A driver has accepted your ride request.",
+                });
+                if (updatedRide.driver_id) {
+                  fetchDriverInfo(updatedRide.driver_id);
+                }
+                break;
+              case 'in_progress':
+                setRideStatus('inProgress');
+                toast({
+                  title: "Ride Started",
+                  description: "Your ride is now in progress.",
+                });
+                break;
+              case 'completed':
+                setRideStatus('completed');
+                toast({
+                  title: "Ride Completed",
+                  description: "Your ride has been completed.",
+                });
+                break;
+              case 'cancelled':
+                setRideStatus('idle');
+                setCurrentRideId(null);
+                toast({
+                  title: "Ride Cancelled",
+                  description: "Your ride has been cancelled.",
+                  variant: "destructive"
+                });
+                break;
+            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Subscription status:", status);
+      });
 
     return () => {
       console.log("Cleaning up real-time subscription");
@@ -179,6 +216,8 @@ const RiderDashboard = () => {
   }, [currentRideId, toast]);
 
   const fetchDriverInfo = async (driverId: string) => {
+    console.log("Fetching driver info for driver:", driverId);
+    
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -198,6 +237,7 @@ const RiderDashboard = () => {
     }
 
     if (data) {
+      console.log("Driver info retrieved:", data);
       setDriverInfo({
         name: data.full_name || "Driver",
         rating: 4.8,
@@ -231,6 +271,7 @@ const RiderDashboard = () => {
 
       setRideStatus("searching");
 
+      // Calculate fare based on actual distance
       const calculatedFare = calculateFare(pickup.coordinates, dropoff.coordinates);
       setEstimatedFare(calculatedFare);
       
@@ -238,6 +279,8 @@ const RiderDashboard = () => {
         longitude: pickup.coordinates[0], 
         latitude: pickup.coordinates[1] 
       };
+      
+      console.log("Creating ride request with fare:", calculatedFare);
       
       const { data, error } = await supabase
         .from('ride_requests')
@@ -258,6 +301,7 @@ const RiderDashboard = () => {
       }
 
       if (data && data.length > 0) {
+        console.log("Ride request created:", data[0]);
         setCurrentRideId(data[0].id);
       }
 
@@ -380,9 +424,11 @@ const RiderDashboard = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     
+    // Make sure we use a consistent formula with fixed parameters
     const baseFare = 20;
     const distanceFare = Math.round(distance * 15);
     
+    // Store the calculated fare and return it
     return baseFare + distanceFare;
   };
 

@@ -1,10 +1,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
-import { Car, User } from "lucide-react";
+import { Car } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 
 const Header = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
   const navigate = useNavigate();
