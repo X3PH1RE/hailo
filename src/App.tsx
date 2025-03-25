@@ -34,7 +34,7 @@ const App = () => {
         
         // Enable realtime for ride_requests table
         try {
-          // Fix: Calling RPC without specifying any parameters
+          // Fix: Call with empty parameters object
           await supabase.rpc('enable_realtime_for_table', {});
           console.log("Realtime enabled for ride_requests table");
         } catch (error) {
