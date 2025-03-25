@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +28,7 @@ const RiderDashboard = () => {
     vehicleColor: string;
     arrivalTime: string;
   } | null>(null);
+  const [estimatedFare, setEstimatedFare] = useState<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -74,13 +74,14 @@ const RiderDashboard = () => {
           coordinates: [riderLongitude, riderLatitude]
         });
         
-        // Set reasonable dropoff coordinates based on the destination name
         const dropoffCoordinates = calculateDestinationCoordinates(riderLongitude, riderLatitude, activeRide.destination);
         
         setDropoff({
           name: activeRide.destination,
           coordinates: dropoffCoordinates
         });
+
+        setEstimatedFare(activeRide.estimated_price);
 
         switch(activeRide.status) {
           case 'pending':
@@ -107,20 +108,14 @@ const RiderDashboard = () => {
     checkAuth();
   }, [toast]);
 
-  // Calculate reasonable coordinates for the destination based on the pickup location
   const calculateDestinationCoordinates = (
     pickupLng: number, 
     pickupLat: number, 
     destinationName: string
   ): [number, number] => {
-    // Simple algorithm to generate coordinates that are a reasonable distance away
-    // This is just for demo purposes - in a real app, you'd use geocoding
-    
-    // Generate a random offset between 0.005 and 0.02 (roughly 0.5km to 2km)
     const randomOffsetLng = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
     const randomOffsetLat = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
     
-    // Generate destination coordinates
     return [
       pickupLng + randomOffsetLng,
       pickupLat + randomOffsetLat
@@ -130,6 +125,8 @@ const RiderDashboard = () => {
   useEffect(() => {
     if (!currentRideId) return;
 
+    console.log("Setting up real-time updates for ride:", currentRideId);
+    
     const channel = supabase
       .channel('ride_status_changes')
       .on(
@@ -176,6 +173,7 @@ const RiderDashboard = () => {
       .subscribe();
 
     return () => {
+      console.log("Cleaning up real-time subscription");
       supabase.removeChannel(channel);
     };
   }, [currentRideId, toast]);
@@ -233,7 +231,8 @@ const RiderDashboard = () => {
 
       setRideStatus("searching");
 
-      const estimatedPrice = calculateFare();
+      const calculatedFare = calculateFare(pickup.coordinates, dropoff.coordinates);
+      setEstimatedFare(calculatedFare);
       
       const riderLocation: Record<string, number> = { 
         longitude: pickup.coordinates[0], 
@@ -247,7 +246,7 @@ const RiderDashboard = () => {
           pickup_location: pickup.name,
           destination: dropoff.name,
           rider_location: riderLocation,
-          estimated_price: estimatedPrice,
+          estimated_price: calculatedFare,
           estimated_time: 5,
           ride_type: 'standard',
           status: 'pending'
@@ -362,14 +361,15 @@ const RiderDashboard = () => {
     setRideStatus("idle");
   };
 
-  const calculateFare = (): number => {
-    if (!pickup || !dropoff) return 0;
-    
+  const calculateFare = (
+    pickupCoords: [number, number],
+    dropoffCoords: [number, number]
+  ): number => {
     const toRad = (value: number) => (value * Math.PI) / 180;
-    const lat1 = pickup.coordinates[1];
-    const lon1 = pickup.coordinates[0];
-    const lat2 = dropoff.coordinates[1];
-    const lon2 = dropoff.coordinates[0];
+    const lat1 = pickupCoords[1];
+    const lon1 = pickupCoords[0];
+    const lat2 = dropoffCoords[1];
+    const lon2 = dropoffCoords[0];
     
     const R = 6371; // Earth's radius in km
     const dLat = toRad(lat2 - lat1);
@@ -380,14 +380,10 @@ const RiderDashboard = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     
-    // Base fare + distance fare (₹20 + ₹15 per km)
     const baseFare = 20;
     const distanceFare = Math.round(distance * 15);
-    const fare = baseFare + distanceFare;
     
-    // For demo purposes, add some randomness to avoid always getting the same fare
-    const randomVariance = Math.floor(Math.random() * 10);
-    return fare + randomVariance;
+    return baseFare + distanceFare;
   };
 
   const getMapMarkers = () => {
@@ -410,7 +406,6 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      // Position driver between current location and pickup for better visualization
       const driverLng = pickup ? pickup.coordinates[0] - 0.005 : 0;
       const driverLat = pickup ? pickup.coordinates[1] - 0.005 : 0;
       
@@ -428,7 +423,6 @@ const RiderDashboard = () => {
     if (!pickup || !dropoff) return undefined;
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      // Show route from driver to pickup location
       const driverLng = pickup.coordinates[0] - 0.005;
       const driverLat = pickup.coordinates[1] - 0.005;
       return {
@@ -438,14 +432,12 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "inProgress") {
-      // Show route from pickup to dropoff
       return {
         start: pickup.coordinates,
         end: dropoff.coordinates,
       };
     }
     
-    // For idle state, show potential route
     if (rideStatus === "idle" && pickup && dropoff) {
       return {
         start: pickup.coordinates,
@@ -506,6 +498,7 @@ const RiderDashboard = () => {
               onConfirmPickup={handleConfirmPickup}
               onConfirmDropoff={handleConfirmDropoff}
               onComplete={handleCompleteRide}
+              estimatedFare={estimatedFare}
             />
           )}
         </CardContent>

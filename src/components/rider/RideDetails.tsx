@@ -24,6 +24,7 @@ interface RideDetailsProps {
   onConfirmPickup: () => void;
   onConfirmDropoff: () => void;
   onComplete: () => void;
+  estimatedFare?: number; // New prop for the fixed estimated fare
 }
 
 const RideDetails = ({
@@ -35,39 +36,15 @@ const RideDetails = ({
   onConfirmPickup,
   onConfirmDropoff,
   onComplete,
+  estimatedFare = 0, // Default to 0 if not provided
 }: RideDetailsProps) => {
   const [eta, setEta] = useState(driverInfo?.arrivalTime || "5 min");
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
-  // Calculate ride fare based on distance
-  const calculateFare = (): string => {
-    if (!pickup || !dropoff) return "₹0";
-    
-    // Calculate distance using Haversine formula
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const lat1 = pickup.coordinates[1];
-    const lon1 = pickup.coordinates[0];
-    const lat2 = dropoff.coordinates[1];
-    const lon2 = dropoff.coordinates[0];
-    
-    const R = 6371; // Radius of the Earth in km
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in km
-    
-    // Base fare + distance fare (₹20 + ₹15 per km)
-    const baseFare = 20;
-    const distanceFare = Math.round(distance * 15);
-    const fare = baseFare + distanceFare;
-    
-    // For demo purposes, add some randomness to avoid always getting the same fare
-    const randomVariance = Math.floor(Math.random() * 10);
-    return `₹${fare + randomVariance}`;
+  // Format the fare as a string with the Rupee symbol
+  const formatFare = (): string => {
+    return `₹${estimatedFare}`;
   };
 
   // Reset progress when status changes to searching
@@ -129,7 +106,7 @@ const RideDetails = ({
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-500">Estimated fare</p>
-                <p className="font-semibold">{calculateFare()}</p>
+                <p className="font-semibold">{formatFare()}</p>
               </div>
               
               <Button
@@ -206,7 +183,7 @@ const RideDetails = ({
             <div className="flex justify-between items-center border-t pt-3">
               <div>
                 <p className="text-sm">Fare</p>
-                <p className="font-semibold">{calculateFare()}</p>
+                <p className="font-semibold">{formatFare()}</p>
               </div>
               
               {rideStatus === "driverAssigned" ? (
@@ -258,7 +235,7 @@ const RideDetails = ({
             <div className="flex justify-between items-center border-t pt-3">
               <div>
                 <p className="text-sm">Fare</p>
-                <p className="font-semibold">{calculateFare()}</p>
+                <p className="font-semibold">{formatFare()}</p>
               </div>
               
               <Button
@@ -288,7 +265,7 @@ const RideDetails = ({
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-500">Fare</span>
-                <span className="font-semibold">{calculateFare()}</span>
+                <span className="font-semibold">{formatFare()}</span>
               </div>
               
               <div className="flex justify-between">

@@ -1,40 +1,46 @@
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { Bell, Menu, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Car, User } from "lucide-react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-interface HeaderProps {
-  isLoggedIn: boolean;
-}
-
-const Header = ({ isLoggedIn }: HeaderProps) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+const Header = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [userName, setUserName] = useState<string | null>(null);
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    setIsMenuOpen(false);
-  };
-
-  const handleSignIn = () => {
-    navigate("/");
-    toast({
-      title: "Sign in",
-      description: "Please sign in to continue",
-    });
-  };
+  // Get user data including the name
+  useEffect(() => {
+    const getUserProfile = async () => {
+      if (!isLoggedIn) return;
+      
+      const { data } = await supabase.auth.getUser();
+      
+      if (data.user) {
+        // Try to get the full name from user metadata
+        const fullName = data.user.user_metadata?.full_name;
+        
+        if (fullName) {
+          setUserName(fullName);
+        } else {
+          // Fallback to getting it from the profiles table
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', data.user.id)
+            .single();
+            
+          if (profileData) {
+            setUserName(profileData.full_name);
+          }
+        }
+      }
+    };
+    
+    getUserProfile();
+  }, [isLoggedIn]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -43,107 +49,74 @@ const Header = ({ isLoggedIn }: HeaderProps) => {
       toast({
         title: "Error signing out",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Signed out successfully",
-        description: "You have been signed out."
-      });
-      navigate("/");
+      return;
     }
+    
+    navigate("/");
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <h1 className="text-2xl font-bold text-purple-800 cursor-pointer" onClick={() => handleNavigate("/")}>Hailo</h1>
-          </div>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+    <header className="bg-white border-b border-gray-200">
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex justify-between items-center">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="h-9 w-9 bg-purple-600 rounded-full flex items-center justify-center">
+              <Car className="h-5 w-5 text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-gray-800">Hailo</h1>
+            <div className="hidden md:flex bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+              College Edition
+            </div>
+          </Link>
+          
+          <nav className="flex gap-4 items-center">
             {isLoggedIn ? (
               <>
-                <Button variant="ghost" size="sm" onClick={() => handleNavigate("/history")}>Ride History</Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/help")}>Help</Button>
+                <Link 
+                  to="/history" 
+                  className="text-gray-600 hover:text-gray-900 hidden md:block"
+                >
+                  Ride History
+                </Link>
+                <Link 
+                  to="/settings" 
+                  className="text-gray-600 hover:text-gray-900 hidden md:block"
+                >
+                  Settings
+                </Link>
+                <Link 
+                  to="/help" 
+                  className="text-gray-600 hover:text-gray-900 hidden md:block"
+                >
+                  Help
+                </Link>
                 
-                {/* Notifications */}
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-                </Button>
-                
-                {/* User Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-purple-100 text-purple-800">US</AvatarFallback>
-                      </Avatar>
-                      <span>User</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleNavigate("/profile")}>Profile</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleNavigate("/settings")}>Settings</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut}>Log out</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex items-center gap-2">
+                  <Link to="/profile" className="flex items-center gap-1 text-gray-800 hover:text-purple-600">
+                    <span className="font-medium">{userName || 'My Profile'}</span>
+                  </Link>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleSignOut}
+                  >
+                    Sign Out
+                  </Button>
+                </div>
               </>
             ) : (
               <Button 
-                variant="default" 
-                size="sm" 
+                onClick={() => navigate("/")}
                 className="bg-purple-600 hover:bg-purple-700"
-                onClick={handleSignIn}
               >
                 Sign In
               </Button>
             )}
           </nav>
-
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </Button>
-          </div>
         </div>
       </div>
-
-      {/* Mobile Navigation */}
-      {isMenuOpen && (
-        <div className="md:hidden bg-white px-4 py-2 shadow-lg border-t border-gray-100">
-          <nav className="flex flex-col space-y-3 py-3">
-            {isLoggedIn ? (
-              <>
-                <div className="flex items-center space-x-3 px-2 py-2 rounded-lg">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-purple-100 text-purple-800">US</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="font-medium">User Name</div>
-                    <div className="text-sm text-gray-500">user@college.edu.in</div>
-                  </div>
-                </div>
-                
-                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/history")}>Ride History</Button>
-                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/notifications")}>Notifications</Button>
-                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/help")}>Help</Button>
-                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/profile")}>Profile</Button>
-                <Button variant="ghost" className="justify-start px-2" onClick={() => handleNavigate("/settings")}>Settings</Button>
-                <Button variant="ghost" className="justify-start px-2 text-red-600" onClick={handleSignOut}>Log out</Button>
-              </>
-            ) : (
-              <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={handleSignIn}>Sign In</Button>
-            )}
-          </nav>
-        </div>
-      )}
     </header>
   );
 };
