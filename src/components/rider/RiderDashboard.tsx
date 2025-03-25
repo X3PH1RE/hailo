@@ -144,7 +144,7 @@ const RiderDashboard = () => {
     
     const enableRealtime = async () => {
       try {
-        await supabase.rpc('enable_realtime_for_table', undefined);
+        await supabase.rpc('enable_realtime_for_table');
         console.log("Realtime enabled for ride_requests table");
       } catch (error) {
         console.error("Error enabling realtime:", error);
@@ -311,7 +311,7 @@ const RiderDashboard = () => {
         setCurrentRideId(data[0].id);
         
         try {
-          await supabase.rpc('enable_realtime_for_table', undefined);
+          await supabase.rpc('enable_realtime_for_table');
           console.log("Realtime enabled for ride_requests table");
         } catch (error) {
           console.error("Error enabling realtime:", error);
