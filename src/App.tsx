@@ -27,10 +27,20 @@ const App = () => {
   const [isAppReady, setIsAppReady] = useState(false);
 
   useEffect(() => {
-    // Initialize Supabase auth
+    // Initialize Supabase auth and realtime functionality
     const initializeAuth = async () => {
       try {
         await supabase.auth.getSession();
+        
+        // Enable realtime for ride_requests table
+        try {
+          await supabase.rpc('enable_realtime_for_table', { table_name: 'ride_requests' });
+          console.log("Realtime enabled for ride_requests table");
+        } catch (error) {
+          console.error("Error enabling realtime:", error);
+          // Continue app initialization even if this fails
+        }
+        
         setIsAppReady(true);
       } catch (error) {
         console.error("Error initializing auth:", error);

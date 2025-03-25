@@ -173,6 +173,7 @@ const RiderDashboard = () => {
                 toast({
                   title: "Driver Found!",
                   description: "A driver has accepted your ride request.",
+                  duration: 5000, // Ensure toast is visible for a reasonable time
                 });
                 if (updatedRide.driver_id) {
                   fetchDriverInfo(updatedRide.driver_id);
@@ -183,6 +184,7 @@ const RiderDashboard = () => {
                 toast({
                   title: "Ride Started",
                   description: "Your ride is now in progress.",
+                  duration: 5000,
                 });
                 break;
               case 'completed':
@@ -190,6 +192,7 @@ const RiderDashboard = () => {
                 toast({
                   title: "Ride Completed",
                   description: "Your ride has been completed.",
+                  duration: 5000,
                 });
                 break;
               case 'cancelled':
@@ -198,7 +201,8 @@ const RiderDashboard = () => {
                 toast({
                   title: "Ride Cancelled",
                   description: "Your ride has been cancelled.",
-                  variant: "destructive"
+                  variant: "destructive",
+                  duration: 5000,
                 });
                 break;
             }
@@ -271,7 +275,7 @@ const RiderDashboard = () => {
 
       setRideStatus("searching");
 
-      // Calculate fare based on actual distance
+      // Calculate fare based on actual distance - using fixed random seed for consistency
       const calculatedFare = calculateFare(pickup.coordinates, dropoff.coordinates);
       setEstimatedFare(calculatedFare);
       
@@ -303,11 +307,17 @@ const RiderDashboard = () => {
       if (data && data.length > 0) {
         console.log("Ride request created:", data[0]);
         setCurrentRideId(data[0].id);
+        
+        // Enable realtime for the ride_requests table if not already enabled
+        await supabase.rpc('enable_realtime_for_table', { table_name: 'ride_requests' })
+          .then(result => console.log("Realtime enabled:", result))
+          .catch(err => console.error("Error enabling realtime:", err));
       }
 
       toast({
         title: "Ride Requested",
         description: "Looking for drivers near you...",
+        duration: 5000,
       });
     } catch (error) {
       console.error("Error creating ride request:", error);
@@ -341,6 +351,7 @@ const RiderDashboard = () => {
       toast({
         title: "Ride Cancelled",
         description: "Your ride request has been cancelled.",
+        duration: 5000,
       });
     } catch (error) {
       console.error("Error cancelling ride:", error);
@@ -424,11 +435,11 @@ const RiderDashboard = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     
-    // Make sure we use a consistent formula with fixed parameters
+    // Use fixed formula parameters to ensure consistent pricing
     const baseFare = 20;
     const distanceFare = Math.round(distance * 15);
     
-    // Store the calculated fare and return it
+    // Return a fixed value based on the calculation
     return baseFare + distanceFare;
   };
 

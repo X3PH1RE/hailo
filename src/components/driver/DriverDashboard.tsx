@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Check, Clock, MapPin, Navigation, Phone, Star, User, X } from "lucide-react";
 import MapView from "@/components/map/MapView";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 
@@ -148,6 +148,11 @@ const DriverDashboard = () => {
     // Initial fetch when going online
     fetchAvailableRides();
     
+    // Enable realtime for the ride_requests table
+    supabase.rpc('enable_realtime_for_table', { table_name: 'ride_requests' })
+      .then(result => console.log("Realtime enabled:", result))
+      .catch(err => console.error("Error enabling realtime:", err));
+    
     // Set up subscription to ride_requests changes
     const channel = supabase
       .channel('driver_available_rides')
@@ -166,7 +171,9 @@ const DriverDashboard = () => {
           await fetchAvailableRides();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Available rides subscription status:", status);
+      });
 
     // Set up polling to periodically refresh available rides
     const intervalId = setInterval(() => {
@@ -206,13 +213,16 @@ const DriverDashboard = () => {
             toast({
               title: "Ride Cancelled",
               description: "The rider has cancelled this ride.",
-              variant: "destructive"
+              variant: "destructive",
+              duration: 5000,
             });
             resetRideState();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Current ride subscription status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -236,6 +246,7 @@ const DriverDashboard = () => {
       toast({
         title: "You're Online",
         description: "You'll start receiving ride requests.",
+        duration: 5000,
       });
       
       fetchAvailableRides();
@@ -246,6 +257,7 @@ const DriverDashboard = () => {
       toast({
         title: "You're Offline",
         description: "You won't receive new ride requests.",
+        duration: 5000,
       });
     }
   };
@@ -341,6 +353,16 @@ const DriverDashboard = () => {
         latitude: 28.6139
       };
       
+      console.log("Accepting ride with ID:", ride.id);
+      
+      // Enable realtime for the ride_requests table
+      try {
+        await supabase.rpc('enable_realtime_for_table', { table_name: 'ride_requests' });
+        console.log("Realtime notifications enabled for ride_requests table");
+      } catch (err) {
+        console.error("Error enabling realtime:", err);
+      }
+      
       const { error } = await supabase
         .from('ride_requests')
         .update({
@@ -362,6 +384,7 @@ const DriverDashboard = () => {
       toast({
         title: "Ride Accepted",
         description: `Navigating to pick up ${ride.rider.name}`,
+        duration: 5000,
       });
     } catch (error) {
       console.error("Error accepting ride:", error);
@@ -378,6 +401,7 @@ const DriverDashboard = () => {
     
     toast({
       description: "Ride request declined",
+      duration: 3000,
     });
   };
 
