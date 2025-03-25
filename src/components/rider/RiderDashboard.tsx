@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,6 +147,11 @@ const RiderDashboard = () => {
 
     console.log("Setting up real-time updates for ride:", currentRideId);
     
+    // Enable realtime for the ride_requests table
+    supabase.rpc('enable_realtime_for_table')
+      .then(result => console.log("Realtime enabled:", result))
+      .catch(error => console.error("Error enabling realtime:", error));
+      
     // Improved subscription to ride_requests changes
     const channel = supabase
       .channel(`ride_status_${currentRideId}`)
@@ -309,9 +313,12 @@ const RiderDashboard = () => {
         setCurrentRideId(data[0].id);
         
         // Enable realtime for the ride_requests table if not already enabled
-        await supabase.rpc('enable_realtime_for_table', { table_name: 'ride_requests' })
-          .then(result => console.log("Realtime enabled:", result))
-          .catch(err => console.error("Error enabling realtime:", err));
+        try {
+          await supabase.rpc('enable_realtime_for_table');
+          console.log("Realtime enabled for ride_requests table");
+        } catch (error) {
+          console.error("Error enabling realtime:", error);
+        }
       }
 
       toast({
@@ -599,3 +606,4 @@ const RiderDashboard = () => {
 };
 
 export default RiderDashboard;
+

@@ -149,16 +149,7 @@ function dispatch(action: Action) {
 type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
-  // We no longer need to generate an ID here as it's handled in the reducer
-  const update = (props: Partial<ToasterToast> & { id: string }) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: props,
-    });
-
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST" });
-
-  // Dispatch the ADD_TOAST action without including the id
+  // Dispatch the ADD_TOAST action with just the props
   // The id will be generated in the reducer
   dispatch({
     type: "ADD_TOAST",
@@ -166,17 +157,22 @@ function toast({ ...props }: Toast) {
       ...props,
       open: true,
       onOpenChange: (open) => {
-        if (!open) dismiss();
+        if (!open) dispatch({ type: "DISMISS_TOAST" });
       },
     },
   });
 
+  // Get the current count value, which will match the id that was just generated
   const id = String(count);
 
   return {
     id,
-    dismiss,
-    update,
+    dismiss: () => dispatch({ type: "DISMISS_TOAST", toastId: id }),
+    update: (props: Partial<ToasterToast>) =>
+      dispatch({
+        type: "UPDATE_TOAST",
+        toast: { ...props, id },
+      }),
   };
 }
 
