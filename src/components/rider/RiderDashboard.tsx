@@ -45,7 +45,6 @@ const RiderDashboard = () => {
 
       console.log("Checking for active ride requests for user:", data.session.user.id);
       
-      // Check if there's an active ride request for this user
       const { data: rideRequests, error } = await supabase
         .from('ride_requests')
         .select('*')
@@ -120,19 +119,15 @@ const RiderDashboard = () => {
     pickupLat: number, 
     destinationName: string
   ): [number, number] => {
-    // Generate a consistent offset based on destination name for same-name destinations
-    // to have the same coordinates in different sessions
     let hash = 0;
     for (let i = 0; i < destinationName.length; i++) {
       hash = ((hash << 5) - hash) + destinationName.charCodeAt(i);
       hash = hash & hash; // Convert to 32bit integer
     }
     
-    // Use the hash to generate a consistent offset between 0.005 and 0.02
     const offsetLngFactor = (Math.abs(hash % 100) / 100) * 0.015 + 0.005;
     const offsetLatFactor = (Math.abs((hash >> 8) % 100) / 100) * 0.015 + 0.005;
     
-    // Determine direction based on hash
     const lngDirection = hash % 2 === 0 ? 1 : -1;
     const latDirection = (hash >> 1) % 2 === 0 ? 1 : -1;
     
@@ -147,12 +142,17 @@ const RiderDashboard = () => {
 
     console.log("Setting up real-time updates for ride:", currentRideId);
     
-    // Enable realtime for the ride_requests table
-    supabase.rpc('enable_realtime_for_table')
-      .then(result => console.log("Realtime enabled:", result))
-      .catch(error => console.error("Error enabling realtime:", error));
+    const enableRealtime = async () => {
+      try {
+        await supabase.rpc('enable_realtime_for_table', undefined);
+        console.log("Realtime enabled for ride_requests table");
+      } catch (error) {
+        console.error("Error enabling realtime:", error);
+      }
+    };
+    
+    enableRealtime();
       
-    // Improved subscription to ride_requests changes
     const channel = supabase
       .channel(`ride_status_${currentRideId}`)
       .on(
@@ -167,7 +167,6 @@ const RiderDashboard = () => {
           console.log("Ride update received in real-time:", payload);
           const updatedRide = payload.new;
           
-          // Process status changes
           if (updatedRide.status) {
             console.log(`Status changed to: ${updatedRide.status}`);
             
@@ -177,7 +176,7 @@ const RiderDashboard = () => {
                 toast({
                   title: "Driver Found!",
                   description: "A driver has accepted your ride request.",
-                  duration: 5000, // Ensure toast is visible for a reasonable time
+                  duration: 5000,
                 });
                 if (updatedRide.driver_id) {
                   fetchDriverInfo(updatedRide.driver_id);
@@ -279,7 +278,6 @@ const RiderDashboard = () => {
 
       setRideStatus("searching");
 
-      // Calculate fare based on actual distance - using fixed random seed for consistency
       const calculatedFare = calculateFare(pickup.coordinates, dropoff.coordinates);
       setEstimatedFare(calculatedFare);
       
@@ -312,9 +310,8 @@ const RiderDashboard = () => {
         console.log("Ride request created:", data[0]);
         setCurrentRideId(data[0].id);
         
-        // Enable realtime for the ride_requests table if not already enabled
         try {
-          await supabase.rpc('enable_realtime_for_table');
+          await supabase.rpc('enable_realtime_for_table', undefined);
           console.log("Realtime enabled for ride_requests table");
         } catch (error) {
           console.error("Error enabling realtime:", error);
@@ -442,11 +439,9 @@ const RiderDashboard = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     
-    // Use fixed formula parameters to ensure consistent pricing
     const baseFare = 20;
     const distanceFare = Math.round(distance * 15);
     
-    // Return a fixed value based on the calculation
     return baseFare + distanceFare;
   };
 
@@ -606,4 +601,3 @@ const RiderDashboard = () => {
 };
 
 export default RiderDashboard;
-

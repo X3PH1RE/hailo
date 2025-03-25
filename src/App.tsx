@@ -34,8 +34,8 @@ const App = () => {
         
         // Enable realtime for ride_requests table
         try {
-          // Use rpc without parameters since the function appears to not accept parameters
-          await supabase.rpc('enable_realtime_for_table');
+          // Call without parameters as function doesn't accept any
+          await supabase.rpc('enable_realtime_for_table', undefined);
           console.log("Realtime enabled for ride_requests table");
         } catch (error) {
           console.error("Error enabling realtime:", error);

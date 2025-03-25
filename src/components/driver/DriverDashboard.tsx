@@ -148,9 +148,16 @@ const DriverDashboard = () => {
     fetchAvailableRides();
     
     // Enable realtime for the ride_requests table
-    supabase.rpc('enable_realtime_for_table')
-      .then(result => console.log("Realtime enabled:", result))
-      .catch(error => console.error("Error enabling realtime:", error));
+    const enableRealtime = async () => {
+      try {
+        await supabase.rpc('enable_realtime_for_table', undefined);
+        console.log("Realtime enabled:", true);
+      } catch (error) {
+        console.error("Error enabling realtime:", error);
+      }
+    };
+    
+    enableRealtime();
     
     // Set up subscription to ride_requests changes
     const channel = supabase
@@ -356,10 +363,10 @@ const DriverDashboard = () => {
       
       // Enable realtime for the ride_requests table
       try {
-        await supabase.rpc('enable_realtime_for_table');
+        await supabase.rpc('enable_realtime_for_table', undefined);
         console.log("Realtime notifications enabled for ride_requests table");
-      } catch (err) {
-        console.error("Error enabling realtime:", err);
+      } catch (error) {
+        console.error("Error enabling realtime:", error);
       }
       
       const { error } = await supabase
@@ -798,3 +805,4 @@ const DriverDashboard = () => {
 };
 
 export default DriverDashboard;
+
