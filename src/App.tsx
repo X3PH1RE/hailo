@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -33,7 +34,7 @@ const App = () => {
         
         // Enable realtime for ride_requests table
         try {
-          await supabase.rpc('enable_realtime_for_table', {});
+          await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' });
           console.log("Realtime enabled for ride_requests table");
         } catch (error) {
           console.error("Error enabling realtime:", error);
