@@ -40,11 +40,11 @@ const RideDetails = ({
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
-  // Calculate ride fare based on distance (simplified calculation)
+  // Calculate ride fare based on distance
   const calculateFare = (): string => {
     if (!pickup || !dropoff) return "₹0";
     
-    // Calculate distance using Haversine formula (simplified)
+    // Calculate distance using Haversine formula
     const toRad = (value: number) => (value * Math.PI) / 180;
     const lat1 = pickup.coordinates[1];
     const lon1 = pickup.coordinates[0];
@@ -60,29 +60,45 @@ const RideDetails = ({
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     
-    // Calculate fare (₹12 per km)
-    const fare = Math.round(distance * 12);
-    return `₹${fare}`;
+    // Base fare + distance fare (₹20 + ₹15 per km)
+    const baseFare = 20;
+    const distanceFare = Math.round(distance * 15);
+    const fare = baseFare + distanceFare;
+    
+    // For demo purposes, add some randomness to avoid always getting the same fare
+    const randomVariance = Math.floor(Math.random() * 10);
+    return `₹${fare + randomVariance}`;
   };
 
+  // Reset progress when status changes to searching
   useEffect(() => {
-    // Simulate progress updates
+    if (rideStatus === "searching") {
+      setProgress(0);
+    }
+  }, [rideStatus]);
+
+  // Simulate progress updates for searching state
+  useEffect(() => {
     if (rideStatus === "searching") {
       const interval = setInterval(() => {
         setProgress((prev) => {
-          const newProgress = prev + 10;
+          // Slow down progress after 70% to make it more realistic
+          const increment = prev < 70 ? 5 : 2;
+          const newProgress = prev + increment;
+          
           if (newProgress >= 100) {
             clearInterval(interval);
           }
+          
           return newProgress > 100 ? 100 : newProgress;
         });
-      }, 300);
+      }, 1000);
       
       return () => clearInterval(interval);
     }
   }, [rideStatus]);
 
-  // Simulate ETA updates
+  // Simulate ETA updates for driver assigned state
   useEffect(() => {
     if (rideStatus === "driverAssigned") {
       const interval = setInterval(() => {

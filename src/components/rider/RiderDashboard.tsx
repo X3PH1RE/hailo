@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,9 +74,12 @@ const RiderDashboard = () => {
           coordinates: [riderLongitude, riderLatitude]
         });
         
+        // Set reasonable dropoff coordinates based on the destination name
+        const dropoffCoordinates = calculateDestinationCoordinates(riderLongitude, riderLatitude, activeRide.destination);
+        
         setDropoff({
           name: activeRide.destination,
-          coordinates: [77.2190, 28.6079] // Default coordinates if not available
+          coordinates: dropoffCoordinates
         });
 
         switch(activeRide.status) {
@@ -102,6 +106,26 @@ const RiderDashboard = () => {
     
     checkAuth();
   }, [toast]);
+
+  // Calculate reasonable coordinates for the destination based on the pickup location
+  const calculateDestinationCoordinates = (
+    pickupLng: number, 
+    pickupLat: number, 
+    destinationName: string
+  ): [number, number] => {
+    // Simple algorithm to generate coordinates that are a reasonable distance away
+    // This is just for demo purposes - in a real app, you'd use geocoding
+    
+    // Generate a random offset between 0.005 and 0.02 (roughly 0.5km to 2km)
+    const randomOffsetLng = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
+    const randomOffsetLat = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
+    
+    // Generate destination coordinates
+    return [
+      pickupLng + randomOffsetLng,
+      pickupLat + randomOffsetLat
+    ];
+  };
 
   useEffect(() => {
     if (!currentRideId) return;
@@ -347,17 +371,23 @@ const RiderDashboard = () => {
     const lat2 = dropoff.coordinates[1];
     const lon2 = dropoff.coordinates[0];
     
-    const R = 6371;
+    const R = 6371; // Earth's radius in km
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
+    const distance = R * c; // Distance in km
     
-    const fare = Math.round(distance * 12);
-    return fare;
+    // Base fare + distance fare (₹20 + ₹15 per km)
+    const baseFare = 20;
+    const distanceFare = Math.round(distance * 15);
+    const fare = baseFare + distanceFare;
+    
+    // For demo purposes, add some randomness to avoid always getting the same fare
+    const randomVariance = Math.floor(Math.random() * 10);
+    return fare + randomVariance;
   };
 
   const getMapMarkers = () => {
@@ -380,8 +410,9 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      const driverLng = pickup ? pickup.coordinates[0] + 0.005 : 0;
-      const driverLat = pickup ? pickup.coordinates[1] + 0.005 : 0;
+      // Position driver between current location and pickup for better visualization
+      const driverLng = pickup ? pickup.coordinates[0] - 0.005 : 0;
+      const driverLat = pickup ? pickup.coordinates[1] - 0.005 : 0;
       
       markers.push({
         id: "driver",
@@ -397,8 +428,9 @@ const RiderDashboard = () => {
     if (!pickup || !dropoff) return undefined;
     
     if (rideStatus === "driverAssigned" || rideStatus === "enRoute") {
-      const driverLng = pickup.coordinates[0] + 0.005;
-      const driverLat = pickup.coordinates[1] + 0.005;
+      // Show route from driver to pickup location
+      const driverLng = pickup.coordinates[0] - 0.005;
+      const driverLat = pickup.coordinates[1] - 0.005;
       return {
         start: [driverLng, driverLat] as [number, number],
         end: pickup.coordinates,
@@ -406,6 +438,15 @@ const RiderDashboard = () => {
     }
     
     if (rideStatus === "inProgress") {
+      // Show route from pickup to dropoff
+      return {
+        start: pickup.coordinates,
+        end: dropoff.coordinates,
+      };
+    }
+    
+    // For idle state, show potential route
+    if (rideStatus === "idle" && pickup && dropoff) {
       return {
         start: pickup.coordinates,
         end: dropoff.coordinates,

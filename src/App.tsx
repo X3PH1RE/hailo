@@ -12,8 +12,16 @@ import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 import { useState, useEffect } from "react";
 import { supabase } from "./integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => {
   const [isAppReady, setIsAppReady] = useState(false);
@@ -21,8 +29,18 @@ const App = () => {
   useEffect(() => {
     // Initialize Supabase auth
     const initializeAuth = async () => {
-      await supabase.auth.getSession();
-      setIsAppReady(true);
+      try {
+        await supabase.auth.getSession();
+        setIsAppReady(true);
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+        toast({
+          title: "Authentication Error",
+          description: "Unable to connect to authentication service. Please try again later.",
+          variant: "destructive",
+        });
+        setIsAppReady(true); // Allow the app to load anyway
+      }
     };
 
     initializeAuth();
