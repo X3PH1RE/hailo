@@ -67,14 +67,15 @@ export const acceptRide = async (
     
     console.log("Accepting ride with ID:", ride.id);
     
-    // Enable realtime explicitly
+    // Enable realtime explicitly - using type assertion to fix TypeScript error
     try {
-      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
+      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime notifications enabled for ride_requests table");
     } catch (error) {
       console.error("Error enabling realtime:", error);
     }
     
+    console.log("Updating ride in database to accepted status...");
     // Update the ride with driver information
     const { error } = await supabase
       .from('ride_requests')
@@ -96,6 +97,9 @@ export const acceptRide = async (
     setRideRequests([]);
     setDriverStatus("rideAccepted");
     
+    // Set up subscription to track this specific ride
+    setupRideSubscription(ride.id, setDriverStatus, toast);
+    
     toast({
       title: "Ride Accepted",
       description: `Navigating to pick up ${ride.rider.name}`,
@@ -109,6 +113,58 @@ export const acceptRide = async (
       variant: "destructive",
     });
   }
+};
+
+// Helper function to set up subscription for a specific ride
+const setupRideSubscription = (
+  rideId: string, 
+  setDriverStatus: Dispatch<SetStateAction<DriverStatus>>,
+  toast: any
+) => {
+  const channel = supabase
+    .channel(`driver_ride_updates_${rideId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'ride_requests',
+        filter: `id=eq.${rideId}`
+      },
+      (payload) => {
+        console.log("Driver received update for ride:", payload);
+        const newStatus = payload.new.status;
+        
+        if (newStatus === 'in_progress') {
+          setDriverStatus('inProgress');
+          toast({
+            title: "Ride Started",
+            description: "The rider has confirmed pickup. Ride in progress.",
+            duration: 3000,
+          });
+        } else if (newStatus === 'completed') {
+          setDriverStatus('completed');
+          toast({
+            title: "Ride Completed",
+            description: "The ride has been completed.",
+            duration: 3000,
+          });
+        } else if (newStatus === 'cancelled') {
+          setDriverStatus('online');
+          toast({
+            title: "Ride Cancelled",
+            description: "The rider has cancelled this ride.",
+            variant: "destructive",
+            duration: 5000,
+          });
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log(`Driver ride subscription ${rideId} status:`, status);
+    });
+    
+  return channel;
 };
 
 export const declineRide = (

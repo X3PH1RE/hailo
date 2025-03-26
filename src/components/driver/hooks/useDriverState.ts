@@ -69,7 +69,7 @@ export const useDriverState = () => {
     // Enable realtime for the ride_requests table
     const enableRealtime = async () => {
       try {
-        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
+        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
         console.log("Realtime enabled:", true);
       } catch (error) {
         console.error("Error enabling realtime:", error);

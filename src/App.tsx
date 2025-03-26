@@ -32,7 +32,7 @@ const App = () => {
       try {
         await supabase.auth.getSession();
         
-        // Enable realtime for ride_requests table
+        // Enable realtime for ride_requests table - using type assertion to fix TypeScript error
         try {
           await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
           console.log("Realtime enabled for ride_requests table");

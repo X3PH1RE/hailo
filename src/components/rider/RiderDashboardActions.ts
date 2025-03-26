@@ -44,9 +44,10 @@ export const requestRide = async (
     
     console.log("Creating ride request with fare:", calculatedFare);
     
-    // Enable realtime explicitly
+    // Enable realtime explicitly - using type assertion to fix TypeScript error
     try {
-      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
+      // Using type assertion to fix TypeScript error
+      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime enabled for ride_requests table");
     } catch (error) {
       console.error("Error enabling realtime:", error);
@@ -73,6 +74,9 @@ export const requestRide = async (
     if (data && data.length > 0) {
       console.log("Ride request created:", data[0]);
       setCurrentRideId(data[0].id);
+      
+      // Set up subscription for this specific ride request
+      setupRideSubscription(data[0].id, setRideStatus);
     }
 
     toast({
@@ -89,6 +93,39 @@ export const requestRide = async (
     });
     setRideStatus("idle");
   }
+};
+
+// Helper function to set up subscription for a specific ride
+const setupRideSubscription = (rideId: string, setRideStatus: Dispatch<SetStateAction<RideStatus>>) => {
+  const channel = supabase
+    .channel(`ride_updates_${rideId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'ride_requests',
+        filter: `id=eq.${rideId}`
+      },
+      (payload) => {
+        console.log("Rider received update for ride:", payload);
+        const newStatus = payload.new.status;
+        
+        if (newStatus === 'accepted') {
+          setRideStatus('driverAssigned');
+          toast({
+            title: "Driver Found!",
+            description: "A driver has accepted your ride request.",
+            duration: 5000,
+          });
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log(`Ride subscription ${rideId} status:`, status);
+    });
+    
+  return channel;
 };
 
 export const cancelRide = async (
@@ -145,6 +182,12 @@ export const confirmPickup = async (
     }
 
     setRideStatus("inProgress");
+    console.log("Ride status updated to in_progress");
+    toast({
+      title: "Ride Started",
+      description: "Your ride is now in progress.",
+      duration: 3000,
+    });
   } catch (error) {
     console.error("Error updating ride status:", error);
     toast({
@@ -172,6 +215,12 @@ export const confirmDropoff = async (
     }
 
     setRideStatus("completed");
+    console.log("Ride status updated to completed");
+    toast({
+      title: "Ride Completed",
+      description: "Your ride has been completed successfully.",
+      duration: 3000,
+    });
   } catch (error) {
     console.error("Error completing ride:", error);
     toast({
