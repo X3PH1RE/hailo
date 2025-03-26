@@ -1,11 +1,12 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { RideRequest } from "../utils/driverUtils";
+import { DriverStatus, RideRequest } from "../utils/driverUtils";
+import { Dispatch, SetStateAction } from "react";
 
 export const toggleDriverStatus = async (
   isOnline: boolean, 
   setIsOnline: (status: boolean) => void,
-  setDriverStatus: (status: string) => void,
+  setDriverStatus: Dispatch<SetStateAction<DriverStatus>>,
   fetchAvailableRides: () => Promise<void>,
   toast: any
 ) => {
@@ -45,7 +46,7 @@ export const acceptRide = async (
   setCurrentRide: (ride: RideRequest) => void,
   setCurrentRideId: (id: string) => void,
   setRideRequests: (requests: RideRequest[]) => void,
-  setDriverStatus: (status: string) => void,
+  setDriverStatus: Dispatch<SetStateAction<DriverStatus>>,
   toast: any
 ) => {
   try {
@@ -68,7 +69,7 @@ export const acceptRide = async (
     
     // Enable realtime for the ride_requests table
     try {
-      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' });
+      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime notifications enabled for ride_requests table");
     } catch (error) {
       console.error("Error enabling realtime:", error);
@@ -123,7 +124,7 @@ export const declineRide = (
 
 export const confirmPickup = async (
   currentRideId: string | null, 
-  setDriverStatus: (status: string) => void,
+  setDriverStatus: Dispatch<SetStateAction<DriverStatus>>,
   toast: any
 ) => {
   if (!currentRideId) return;
@@ -151,7 +152,7 @@ export const confirmPickup = async (
 
 export const completeRide = async (
   currentRideId: string | null, 
-  setDriverStatus: (status: string) => void,
+  setDriverStatus: Dispatch<SetStateAction<DriverStatus>>,
   toast: any
 ) => {
   if (!currentRideId) return;

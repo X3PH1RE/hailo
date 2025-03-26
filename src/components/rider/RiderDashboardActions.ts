@@ -2,11 +2,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { calculateFare, Location } from "./utils/locationUtils";
+import { Dispatch, SetStateAction } from "react";
+import { RideStatus } from "./hooks/useRideState";
 
 export const requestRide = async (
   pickup: Location | null,
   dropoff: Location | null,
-  setRideStatus: (status: string) => void,
+  setRideStatus: Dispatch<SetStateAction<RideStatus>>,
   setEstimatedFare: (fare: number) => void,
   setCurrentRideId: (id: string | null) => void
 ) => {
@@ -65,7 +67,7 @@ export const requestRide = async (
       setCurrentRideId(data[0].id);
       
       try {
-        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' });
+        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
         console.log("Realtime enabled for ride_requests table");
       } catch (error) {
         console.error("Error enabling realtime:", error);
@@ -91,7 +93,7 @@ export const requestRide = async (
 export const cancelRide = async (
   currentRideId: string | null,
   setCurrentRideId: (id: string | null) => void,
-  setRideStatus: (status: string) => void
+  setRideStatus: Dispatch<SetStateAction<RideStatus>>
 ) => {
   if (!currentRideId) {
     setRideStatus("idle");
@@ -127,7 +129,7 @@ export const cancelRide = async (
 
 export const confirmPickup = async (
   currentRideId: string | null,
-  setRideStatus: (status: string) => void
+  setRideStatus: Dispatch<SetStateAction<RideStatus>>
 ) => {
   if (!currentRideId) return;
 
@@ -154,7 +156,7 @@ export const confirmPickup = async (
 
 export const confirmDropoff = async (
   currentRideId: string | null,
-  setRideStatus: (status: string) => void
+  setRideStatus: Dispatch<SetStateAction<RideStatus>>
 ) => {
   if (!currentRideId) return;
 
