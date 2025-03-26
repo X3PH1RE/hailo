@@ -66,7 +66,7 @@ export const useDriverState = () => {
     // Initial fetch when going online
     fetchAvailableRides();
     
-    // Enable realtime for the ride_requests table
+    // Enable realtime for the ride_requests table with proper type casting
     const enableRealtime = async () => {
       try {
         await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);

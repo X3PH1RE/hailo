@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { calculateFare, Location } from "./utils/locationUtils";
@@ -44,9 +43,8 @@ export const requestRide = async (
     
     console.log("Creating ride request with fare:", calculatedFare);
     
-    // Enable realtime explicitly - using type assertion to fix TypeScript error
+    // Enable realtime explicitly with proper type casting
     try {
-      // Using type assertion to fix TypeScript error
       await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime enabled for ride_requests table");
     } catch (error) {
@@ -95,7 +93,6 @@ export const requestRide = async (
   }
 };
 
-// Helper function to set up subscription for a specific ride
 const setupRideSubscription = (rideId: string, setRideStatus: Dispatch<SetStateAction<RideStatus>>) => {
   const channel = supabase
     .channel(`ride_updates_${rideId}`)

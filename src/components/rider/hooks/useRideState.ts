@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -151,7 +150,7 @@ export const useRideState = () => {
   const setupRideSubscription = (rideId: string) => {
     console.log("Setting up enhanced real-time updates for ride:", rideId);
     
-    // Enable realtime explicitly - using type assertion to fix TypeScript error
+    // Enable realtime explicitly with proper type casting
     try {
       supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime explicitly enabled for ride_requests table");

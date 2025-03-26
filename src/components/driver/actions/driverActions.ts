@@ -67,7 +67,7 @@ export const acceptRide = async (
     
     console.log("Accepting ride with ID:", ride.id);
     
-    // Enable realtime explicitly - using type assertion to fix TypeScript error
+    // Enable realtime explicitly with proper type casting
     try {
       await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
       console.log("Realtime notifications enabled for ride_requests table");
