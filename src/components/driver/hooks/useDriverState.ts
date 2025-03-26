@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -68,7 +69,7 @@ export const useDriverState = () => {
     // Enable realtime for the ride_requests table
     const enableRealtime = async () => {
       try {
-        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
+        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
         console.log("Realtime enabled:", true);
       } catch (error) {
         console.error("Error enabling realtime:", error);
@@ -77,7 +78,7 @@ export const useDriverState = () => {
     
     enableRealtime();
     
-    // Set up subscription to ride_requests changes
+    // Set up subscription to ride_requests changes with better logging
     const channel = supabase
       .channel('driver_available_rides')
       .on(
@@ -107,6 +108,7 @@ export const useDriverState = () => {
     }, 10000); // Poll every 10 seconds
 
     return () => {
+      console.log("Cleaning up driver available rides subscription");
       supabase.removeChannel(channel);
       clearInterval(intervalId);
     };
@@ -114,6 +116,8 @@ export const useDriverState = () => {
 
   useEffect(() => {
     if (!currentRideId) return;
+
+    console.log("Setting up driver's current ride subscription for:", currentRideId);
 
     const channel = supabase
       .channel('driver_current_ride')
@@ -130,9 +134,21 @@ export const useDriverState = () => {
           console.log("Current ride updated:", updatedRide);
           
           if (updatedRide.status === 'in_progress' && driverStatus === 'rideAccepted') {
+            console.log("Updating driver status to inProgress");
             setDriverStatus('inProgress');
+            toast({
+              title: "Ride Started",
+              description: "The ride is now in progress.",
+              duration: 3000,
+            });
           } else if (updatedRide.status === 'completed') {
+            console.log("Updating driver status to completed");
             setDriverStatus('completed');
+            toast({
+              title: "Ride Completed",
+              description: "The ride has been completed.",
+              duration: 3000,
+            });
           } else if (updatedRide.status === 'cancelled') {
             toast({
               title: "Ride Cancelled",
@@ -149,6 +165,7 @@ export const useDriverState = () => {
       });
 
     return () => {
+      console.log("Cleaning up driver current ride subscription");
       supabase.removeChannel(channel);
     };
   }, [currentRideId, driverStatus, toast]);

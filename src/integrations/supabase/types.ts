@@ -9,39 +9,86 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      driver_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string | null
+          driver_id: string
+          id: string
+          rating: number
+          ride_request_id: string
+          rider_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string | null
+          driver_id: string
+          id?: string
+          rating: number
+          ride_request_id: string
+          rider_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string | null
+          driver_id?: string
+          id?: string
+          rating?: number
+          ride_request_id?: string
+          rider_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_ratings_ride_request_id_fkey"
+            columns: ["ride_request_id"]
+            isOneToOne: false
+            referencedRelation: "ride_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           college: string | null
-          created_at: string
-          full_name: string | null
+          created_at: string | null
+          driver_rating: number | null
+          full_name: string
           id: string
+          is_driver: boolean | null
           phone: string | null
-          updated_at: string
+          total_rides: number | null
+          updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           college?: string | null
-          created_at?: string
-          full_name?: string | null
+          created_at?: string | null
+          driver_rating?: number | null
+          full_name: string
           id: string
+          is_driver?: boolean | null
           phone?: string | null
-          updated_at?: string
+          total_rides?: number | null
+          updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           college?: string | null
-          created_at?: string
-          full_name?: string | null
+          created_at?: string | null
+          driver_rating?: number | null
+          full_name?: string
           id?: string
+          is_driver?: boolean | null
           phone?: string | null
-          updated_at?: string
+          total_rides?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
       ride_requests: {
         Row: {
-          created_at: string
+          created_at: string | null
           destination: string
           driver_id: string | null
           driver_location: Json | null
@@ -51,12 +98,12 @@ export type Database = {
           pickup_location: string
           ride_type: string
           rider_id: string
-          rider_location: Json | null
+          rider_location: Json
           status: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           destination: string
           driver_id?: string | null
           driver_location?: Json | null
@@ -66,12 +113,12 @@ export type Database = {
           pickup_location: string
           ride_type: string
           rider_id: string
-          rider_location?: Json | null
+          rider_location: Json
           status?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           destination?: string
           driver_id?: string | null
           driver_location?: Json | null
@@ -81,9 +128,9 @@ export type Database = {
           pickup_location?: string
           ride_type?: string
           rider_id?: string
-          rider_location?: Json | null
+          rider_location?: Json
           status?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

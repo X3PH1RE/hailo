@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -147,86 +148,90 @@ export const useRideState = () => {
   useEffect(() => {
     if (!currentRideId) return;
 
-    console.log("Setting up real-time updates for ride:", currentRideId);
+    console.log("Setting up enhanced real-time updates for ride:", currentRideId);
     
-    const enableRealtime = async () => {
+    // More robust approach to enable realtime
+    const setupRealtime = async () => {
       try {
-        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
-        console.log("Realtime enabled for ride_requests table");
+        // First enable realtime for the table
+        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
+        console.log("Realtime explicitly enabled for ride_requests table");
+        
+        // Then set up the subscription with enhanced logging
+        const channel = supabase
+          .channel(`ride_status_${currentRideId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'ride_requests',
+              filter: `id=eq.${currentRideId}`
+            },
+            (payload) => {
+              console.log("Ride update received in real-time:", payload);
+              const updatedRide = payload.new;
+              
+              if (updatedRide.status) {
+                console.log(`Status changed to: ${updatedRide.status}`);
+                
+                switch(updatedRide.status) {
+                  case 'accepted':
+                    setRideStatus('driverAssigned');
+                    toast({
+                      title: "Driver Found!",
+                      description: "A driver has accepted your ride request.",
+                      duration: 5000,
+                    });
+                    if (updatedRide.driver_id) {
+                      console.log("Fetching driver info for:", updatedRide.driver_id);
+                      fetchDriverInfo(updatedRide.driver_id);
+                    }
+                    break;
+                  case 'in_progress':
+                    setRideStatus('inProgress');
+                    toast({
+                      title: "Ride Started",
+                      description: "Your ride is now in progress.",
+                      duration: 5000,
+                    });
+                    break;
+                  case 'completed':
+                    setRideStatus('completed');
+                    toast({
+                      title: "Ride Completed",
+                      description: "Your ride has been completed.",
+                      duration: 5000,
+                    });
+                    break;
+                  case 'cancelled':
+                    setRideStatus('idle');
+                    setCurrentRideId(null);
+                    toast({
+                      title: "Ride Cancelled",
+                      description: "Your ride has been cancelled.",
+                      variant: "destructive",
+                      duration: 5000,
+                    });
+                    break;
+                }
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log("Rider subscription status:", status);
+          });
+
+        return () => {
+          console.log("Cleaning up real-time subscription for ride:", currentRideId);
+          supabase.removeChannel(channel);
+        };
       } catch (error) {
-        console.error("Error enabling realtime:", error);
+        console.error("Error setting up realtime:", error);
       }
     };
     
-    enableRealtime();
-      
-    const channel = supabase
-      .channel(`ride_status_${currentRideId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'ride_requests',
-          filter: `id=eq.${currentRideId}`
-        },
-        (payload) => {
-          console.log("Ride update received in real-time:", payload);
-          const updatedRide = payload.new;
-          
-          if (updatedRide.status) {
-            console.log(`Status changed to: ${updatedRide.status}`);
-            
-            switch(updatedRide.status) {
-              case 'accepted':
-                setRideStatus('driverAssigned');
-                toast({
-                  title: "Driver Found!",
-                  description: "A driver has accepted your ride request.",
-                  duration: 5000,
-                });
-                if (updatedRide.driver_id) {
-                  fetchDriverInfo(updatedRide.driver_id);
-                }
-                break;
-              case 'in_progress':
-                setRideStatus('inProgress');
-                toast({
-                  title: "Ride Started",
-                  description: "Your ride is now in progress.",
-                  duration: 5000,
-                });
-                break;
-              case 'completed':
-                setRideStatus('completed');
-                toast({
-                  title: "Ride Completed",
-                  description: "Your ride has been completed.",
-                  duration: 5000,
-                });
-                break;
-              case 'cancelled':
-                setRideStatus('idle');
-                setCurrentRideId(null);
-                toast({
-                  title: "Ride Cancelled",
-                  description: "Your ride has been cancelled.",
-                  variant: "destructive",
-                  duration: 5000,
-                });
-                break;
-            }
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log("Subscription status:", status);
-      });
-
-    return () => {
-      console.log("Cleaning up real-time subscription");
-      supabase.removeChannel(channel);
-    };
+    setupRealtime();
   }, [currentRideId, toast]);
 
   return {

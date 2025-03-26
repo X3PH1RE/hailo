@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { DriverStatus, RideRequest } from "../utils/driverUtils";
 import { Dispatch, SetStateAction } from "react";
@@ -66,14 +67,15 @@ export const acceptRide = async (
     
     console.log("Accepting ride with ID:", ride.id);
     
-    // Enable realtime for the ride_requests table
+    // Enable realtime explicitly
     try {
-      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
+      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
       console.log("Realtime notifications enabled for ride_requests table");
     } catch (error) {
       console.error("Error enabling realtime:", error);
     }
     
+    // Update the ride with driver information
     const { error } = await supabase
       .from('ride_requests')
       .update({
@@ -86,6 +88,8 @@ export const acceptRide = async (
     if (error) {
       throw error;
     }
+    
+    console.log("Ride accepted successfully, database updated");
 
     setCurrentRide(ride);
     setCurrentRideId(ride.id);
@@ -129,6 +133,11 @@ export const confirmPickup = async (
   if (!currentRideId) return;
   
   try {
+    console.log("Confirming pickup for ride:", currentRideId);
+    
+    // Add a small delay to ensure database consistency
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const { error } = await supabase
       .from('ride_requests')
       .update({ status: 'in_progress' })
@@ -137,8 +146,16 @@ export const confirmPickup = async (
     if (error) {
       throw error;
     }
+    
+    console.log("Pickup confirmed successfully, status updated to in_progress");
 
     setDriverStatus("inProgress");
+    
+    toast({
+      title: "Pickup Confirmed",
+      description: "Ride is now in progress",
+      duration: 3000,
+    });
   } catch (error) {
     console.error("Error updating ride status:", error);
     toast({
@@ -157,6 +174,11 @@ export const completeRide = async (
   if (!currentRideId) return;
   
   try {
+    console.log("Completing ride:", currentRideId);
+    
+    // Add a small delay to ensure database consistency
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const { error } = await supabase
       .from('ride_requests')
       .update({ status: 'completed' })
@@ -165,8 +187,16 @@ export const completeRide = async (
     if (error) {
       throw error;
     }
+    
+    console.log("Ride completed successfully, status updated to completed");
 
     setDriverStatus("completed");
+    
+    toast({
+      title: "Ride Completed",
+      description: "Thank you for driving with Hailo!",
+      duration: 3000,
+    });
   } catch (error) {
     console.error("Error completing ride:", error);
     toast({

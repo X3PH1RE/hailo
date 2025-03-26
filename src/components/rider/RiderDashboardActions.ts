@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { calculateFare, Location } from "./utils/locationUtils";
@@ -43,6 +44,14 @@ export const requestRide = async (
     
     console.log("Creating ride request with fare:", calculatedFare);
     
+    // Enable realtime explicitly
+    try {
+      await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as never);
+      console.log("Realtime enabled for ride_requests table");
+    } catch (error) {
+      console.error("Error enabling realtime:", error);
+    }
+    
     const { data, error } = await supabase
       .from('ride_requests')
       .insert({
@@ -64,13 +73,6 @@ export const requestRide = async (
     if (data && data.length > 0) {
       console.log("Ride request created:", data[0]);
       setCurrentRideId(data[0].id);
-      
-      try {
-        await supabase.rpc('enable_realtime_for_table', { table: 'ride_requests' } as any);
-        console.log("Realtime enabled for ride_requests table");
-      } catch (error) {
-        console.error("Error enabling realtime:", error);
-      }
     }
 
     toast({
