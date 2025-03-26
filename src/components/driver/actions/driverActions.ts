@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { DriverStatus, RideRequest } from "../utils/driverUtils";
 import { Dispatch, SetStateAction } from "react";
